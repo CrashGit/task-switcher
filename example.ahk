@@ -15,28 +15,57 @@ Suspend(true)
 ; @example of changing options without modifying the class directly
 ; see @options near beginning of TaskSwitcher class for all options you can modify
 TaskSwitcher({
-    backgroundColor: 0xFF111111,
+    backgroundColor: 0xDD111111,
+    panelBackgroundColor: 0xDD111111,
     bannerColor: 0xFF00BB00,
     bannerText: 'Tasks',
     alwaysHighlightFirst: true,
-    rowHighlightColor: 0xFF555555,
+    rowHighlightColor: 0x77555555,
     defaultSearchText: 'Search...',
     searchBackgroundColor: 0xFF333333,
     highlightTextColor: 0xFF00FF33,
     mouseHighlightTextColor: 0xFF999999,
     escapeAlwaysClose: true,
-    closeButtonSize: 50,
-    closeBackgroundColor: 0x00000000
+    closeButtonSize: 40,
+    closeBackgroundColor: 0x00000000,
+    closeBackgroundHighlightColor: 0xFFFFFFFF,
+    closeXHighlightColor: 0xFF00BB00,
+    showPanelOnOpen: true,
+    menuWidth: 1200,
+    bannerHeight: 90,
+    rowHeight: 100,
+    iconSize: 60,
+    maxVisibleRows: 10,
+    splitterWidth: 3,
+    dividerHeight: 2,
+    coordinates: 'Recenter',
+    preventResize: true,
+    fullLengthDividers: true
 })
 
+; move cursor to center of activated window
 TaskSwitcher.OnWindowActivate((window) {
-    list := ''
-    for prop, value in window.OwnProps() {
-        list .= Format('Name: {} - Value: {}`n', prop, value)
-    }
+    WinGetPos(&x, &y, &w, &h, window.hwnd)
+    centerX := x + (w // 2)
+    centerY := y + (h // 2)
+    DllCall('SetCursorPos', 'Int', centerX, 'Int', centerY)
+})
 
-    ToolTip(list)
-    SetTimer(ToolTip, -3000)
+; alternate example
+; TaskSwitcher.OnWindowActivate((window) {
+;     list := ''
+;     for prop, value in window.OwnProps() {
+;         list .= Format('Name: {} - Value: {}`n', prop, value)
+;     }
+
+;     ToolTip(list)
+;     SetTimer(ToolTip, -3000)
+; })
+
+; moves cursor to center of menu when opened
+TaskSwitcher.OnMenuOpen((menu) {
+    menu.GetPos(&x, &y, &w, &h)
+    MouseMove(x + (w // 2), y + (h // 2))
 })
 
 Suspend(false)
@@ -61,3 +90,8 @@ TaskSwitcher.AltTabReplacement()
 
 ; Toggles the AltTabReplacement hotkeys created from above. 'On' and 'Off' are also both valid parameters.
 $F4::TaskSwitcher.AltTabReplacement('Toggle')
+
+
+#HotIf TaskSwitcher.isActive
++=::TaskSwitcher.TogglePanel()
+#HotIf

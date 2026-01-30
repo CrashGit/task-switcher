@@ -40,6 +40,29 @@ class TaskSwitcher {
      * No considerations are done if more than two colors are supplied, you must use your own judgement if the text visibility is good enough for you.
      * Those options that support gradients are: rowSelectedColor, mouseRowSelectedBackgroundColor, and mouseRowHoverBackgroundColor
      */
+    ; static rowBackgroundColor               := 0xFF333333,
+    ;        rowTextColor                     := 0xFFFFFFFF,
+    ;        rowSelectedColor                 := 0x30FFFFFF,
+    ;        rowSelectedTextColor             := 0xFF6995DB,
+    ;        mouseRowHoverTextColor           := 0xFF6995DB,
+    ;        mouseRowHoverBackgroundColor     := 0x30FFFFFF,
+    ;        mouseRowSelectedBackgroundColor  := 'Auto',
+
+    ;        bannerColor                      := 0xFF1B56B5,
+    ;        bannerTitleColor                 := 0xFFFFFFFF,
+    ;        placeholderTextColor             := 0xFFC8C8C8,
+    ;        searchTextColor                  := 0xFFFFFFFF,
+    ;        searchBackgroundColor            := 0xFF333333,
+    ;        closeBackgroundColor             := 0x40FFFFFF,
+    ;        closeHoverBackgroundColor        := 0x80FF0000,
+    ;        closeXColor                      := 0xFFAAAAAA,
+    ;        closeXHoverColor                 := 0xFFFFFFFF,
+    ;        panelBackgroundColor             := 0xFF333333,
+    ;        panelIconBackgroundColor         := 0xFF333333,
+    ;        panelIconLinesColor              := 0xFFFFFFFF,
+    ;        rowDividerColor                  := 0xFFFFFFFF,
+    ;        partitionColor                   := 0xFFFFFFFF,
+
     static rowBackgroundColor               := 0xFF333333,
            rowTextColor                     := 'Auto',
            rowSelectedColor                 := 'Auto',
@@ -66,29 +89,6 @@ class TaskSwitcher {
            panelIconLinesColor              := 'Auto',
            partitionColor                   := 'Auto',
 
-    ; static rowBackgroundColor               := 0xFF333333,
-    ;        rowTextColor                     := 0xFFFFFFFF,
-    ;        rowSelectedColor                 := 0x30FFFFFF,
-    ;        rowSelectedTextColor             := 0xFF6995DB,
-    ;        mouseRowHoverTextColor           := 0xFF6995DB,
-    ;        mouseRowHoverBackgroundColor     := 0x30FFFFFF,
-    ;        mouseRowSelectedBackgroundColor  := 'Auto',
-
-    ;        bannerColor                      := 0xFF1B56B5,
-    ;        bannerTitleColor                 := 0xFFFFFFFF,
-    ;        placeholderTextColor             := 0xFFC8C8C8,
-    ;        searchTextColor                  := 0xFFFFFFFF,
-    ;        searchBackgroundColor            := 0xFF333333,
-    ;        closeBackgroundColor             := 0x40FFFFFF,
-    ;        closeHoverBackgroundColor        := 0x80FF0000,
-    ;        closeXColor                      := 0xFFAAAAAA,
-    ;        closeXHoverColor                 := 0xFFFFFFFF,
-    ;        panelBackgroundColor             := 0xFF333333,
-    ;        panelIconBackgroundColor         := 0xFF333333,
-    ;        panelIconLinesColor              := 0xFFFFFFFF,
-    ;        rowDividerColor                  := 0xFFFFFFFF,
-    ;        partitionColor                   := 0xFFFFFFFF,
-
            bannerTitle                      := 'Task Switcher',
            placeholderSearchText            := '',
            monitor                          := MonitorGetPrimary(),     ; any valid number that represents a monitor you have (can use MonitorGetCount() to find out the the max)
@@ -103,12 +103,13 @@ class TaskSwitcher {
            partitionWidth                   := 2,
            maxVisibleRows                   := 8,
            scrollSmoothness                 := 0.35,    ; higher values make it feel snappier and less smooth
+           defaultPanelSizePercent          := 0.3,     ; 0.0-1.0 float
 
            wrapRowSelection                 := true,
            alwaysHighlightFirst             := true,    ; applies to filtering windows when typing
            showAllCloseButtons              := false,
            escapeAlwaysClose                := false,   ; alternatively, you could also just use a hotkey to do the same thing
-           showPanelOnOpen                  := false,
+           showPanelOnOpen                  := true,
            fullLengthDividers               := false,
            fullLengthPartition              := true,
            preventResize                    := false,
@@ -174,6 +175,8 @@ class TaskSwitcher {
             return
         }
 
+        this.__CleanupThumbnail()
+
         DllCall('ReleaseCapture')
         this._ih.Stop()
         this.Menu.Hide()
@@ -193,7 +196,6 @@ class TaskSwitcher {
         this._clicked := {item: '', index: 0}
         this._searchText := this.placeholderSearchText
         this._mouseLeft := true
-        this._partitionX := this.menuWidth * 0.7
         this._showInfoPanel := this.showPanelOnOpen
 
         this._scrollOffset := 0
@@ -227,6 +229,7 @@ class TaskSwitcher {
         this.__ScrollToSelectedRow()
         this.__DrawMenu(() {
             this.__UpdateWindowList()
+            this.__UpdatePanel()
         })
     }
 
@@ -242,6 +245,7 @@ class TaskSwitcher {
         this.__ScrollToSelectedRow()
         this.__DrawMenu(() {
             this.__UpdateWindowList()
+            this.__UpdatePanel()
         })
     }
 
@@ -282,11 +286,6 @@ class TaskSwitcher {
         this._onMenuOpen := (_, params*) => Callback(params*)
     }
 
-    static ClearSearch() {
-        this._searchText := this.placeholderSearchText
-        this.__DrawMenu(() => this.__UpdateSearchBar())
-    }
-
     ; pass 'Off' if you ever want to disable those hotkeys after already being active
     ; pass 'Toggle' if you want to toggle the state
     static AltTabReplacement(state := 'On') {
@@ -305,9 +304,13 @@ class TaskSwitcher {
             Critical('Off')
         }, state)
 
-        HotIf((*) => TaskSwitcher.isActive)
+        HotIf((*) => altTabHotkeysEnabled && TaskSwitcher.isActive)
         Hotkey('!Tab', (*) => TaskSwitcher.SelectNextWindow(), state)
         Hotkey('+!Tab', (*) => TaskSwitcher.SelectPreviousWindow(), state)
+        Hotkey('*!Escape', (*) {
+            TaskSwitcher.CloseMenu()
+            altTabHotkeysEnabled := false
+        }, state)
 
         HotIf((*) => altTabHotkeysEnabled)
         Hotkey('~*Alt up', (*) {
@@ -514,15 +517,20 @@ class TaskSwitcher {
             ; this.Menu.windows := this._allWindows.Clone()
             this._showInfoPanel := this.showPanelOnOpen
             this._searchText := this.placeholderSearchText
-            this._listMinWidth := this.menuWidth * 0.3
-            this._partitionX := this.menuWidth * 0.7
-            this._infoPanelMinWidth := this.menuWidth * 0.3
+            this._listMinWidth := this.menuWidth * 0.2
+            this._infoPanelMinWidth := this.menuWidth * 0.2
+            this._partitionX := this.menuWidth * 0.8
             this._rowNumberWidth := this.rowNumbers ? 30 : 0
             this._titleX := (this.iconSize + (2 * this.marginX)) + (this._rowNumberWidth)
             this._rowWithDivider := this.rowHeight + this.rowDividerHeight
             this.__RefreshWindows()
             this.__UpdateTotalHeight()
             this._lastWindowListHeight := this._lastWindowHeight := this._lockedHeight := this._menuHeight
+
+            this._partitionX := Min(Max(
+                this.menuWidth * (1 - this.defaultPanelSizePercent),
+                this._infoPanelMinWidth
+            ), this._listMinWidth)
         }
 
         SearchBarDimensions() {
@@ -593,8 +601,8 @@ class TaskSwitcher {
         ; this._lastBitmapHeight := this._menuHeight
         ; this._lockedHeight := this._menuHeight
 
-        this._lastPanelWidth := this.menuWidth - this._partitionX
-        this._lastWindowListWidth := this._partitionX
+        ; this._lastPanelWidth := this.menuWidth - this._partitionX
+        ; this._lastWindowListWidth := this._partitionX
 
         this.__UpdateTotalHeight()      ; necessary for certain this._selectedRow starting values when this.__ScrollToSelectedRow() is called
         this.__ScrollToSelectedRow()
@@ -1007,6 +1015,7 @@ class TaskSwitcher {
 
     static __UpdatePanel() {
         if !this._showInfoPanel {
+            this.__CleanupThumbnail()
             return
         }
 
@@ -1039,16 +1048,300 @@ class TaskSwitcher {
 
         pBrushPartition := Gdip_BrushCreateSolid(this.partitionColor)
         Gdip_FillRectangle(Panel, pBrushPartition, 0, partitionY, partitionWidth, partitionHeight)
+        Gdip_FillRectangle(Panel, pBrushPartition, 0, 0, width, partitionWidth)
         Gdip_DeleteBrush(pBrushPartition)
 
-        topBrush := Gdip_BrushCreateSolid(this.partitionColor)
-        Gdip_FillRectangle(Panel, topBrush, 0, 0, width, partitionWidth)
-        Gdip_DeleteBrush(topBrush)
+        this.__DrawPanelTabs(Panel)
 
-        ; draw panel content if a window is selected
+        ; draw tab content
+        tabHeight := 40
         if this._selectedRow > 0 && this._selectedRow <= this.Menu.windows.Length {
             window := this.Menu.windows[this._selectedRow]
-            this.__DrawInfoPanel(window, 0, 0, width, height)
+
+            this.__CleanupThumbnail()  ; Clean up before drawing preview
+            if this._panelTab = 'preview' {
+                this.__UpdatePanelPreview(window, 0, tabHeight, width, height - tabHeight)
+            } else {
+                this.__UpdatePanelInfo(window, 0, tabHeight, width, height - tabHeight)
+            }
+        }
+    }
+
+    static __DrawPanelTabs(Panel := this._sections['Panel'].graphics) {
+        static tabs := ['Preview', 'Info']
+        this._panelTabRects := []
+
+        width := this.menuWidth - this._partitionX
+        tabHeight := 40
+
+        spacing := this.marginX
+        partitionSize := this.partitionWidth / 2
+        y := this.marginY + partitionSize
+
+        ; available space for tabs (minus partition and margins)
+        availableWidth := width - partitionSize - (spacing * 3)     ; left margin, between, right margin
+        tabWidth := availableWidth / tabs.Length
+
+        oldMode := Gdip_SetSmoothingMode(Panel, 4)
+        for index, tabName in tabs {
+            offset := index = 1 ? partitionSize : 0
+            x := offset + spacing + ((index - 1) * (tabWidth + spacing))
+
+            isActive := (this._panelTab = (index = 1 ? 'preview' : 'info'))
+            isHovered := this._hoveredPanelTab = (index = 1 ? 'preview' : 'info')
+
+            if isHovered {
+                bgColor := this.__ColorBrightnessAutoAdjust(this.panelBackgroundColor, 100)
+                pBrush := Gdip_BrushCreateSolid(bgColor)
+            } else if isActive {
+                bgColor := this.__ColorBrightnessAutoAdjust(this.panelBackgroundColor, 80)
+                pBrush := Gdip_BrushCreateSolid(bgColor)
+            } else {
+                bgColor := this.__ColorBrightnessAutoAdjust(this.panelBackgroundColor, 60)
+                pBrush := Gdip_BrushCreateSolid(bgColor)
+            }
+
+            Gdip_FillRoundedRectangle(Panel, pBrush, x, y, tabWidth, tabHeight - this.marginY, 6)
+            Gdip_DeleteBrush(pBrush)
+
+            textColor := isActive ? this.panelHeaderTextColor : this.panelBodyTextColor
+            options := 'x' x ' y' (y + 6) ' s14 Bold c' textColor ' Center'
+            Gdip_TextToGraphics(Panel, tabName, options, 'Arial', tabWidth, tabHeight - (y * 2))
+
+            this._panelTabRects.Push({
+                x1:  x,
+                y1:  y,
+                x2:  x + tabWidth,
+                y2:  tabHeight,
+                tab: tabName
+            })
+        }
+
+        Gdip_SetSmoothingMode(Panel, oldMode)
+    }
+
+    static __OnMouseMove(wParam, lParam, msg, hwnd) {
+        static tme := TrackMouseLeave(hwnd)
+
+        if this._mouseLeft {
+            this._mouseLeft := false
+            DllCall('user32.dll\TrackMouseEvent', 'Ptr', tme)
+        }
+
+        x := lParam & 0xFFFF
+        y := lParam >> 16
+
+        if this._clicked.item = 'partition' {
+            this.__OnPartitionMove(x)
+            return
+        } else if this.__IsOnPartition(x, y) {
+            DllCall('SetCursor', 'Ptr', DllCall('LoadCursor', 'Ptr', 0, 'Ptr', 32646))
+            return
+        }
+
+        if this._clicked.item {
+            return
+        }
+
+        this._canScroll := (y > this.bannerHeight) && x < (this._showInfoPanel ? this._partitionX : this.menuWidth)
+
+        oldHoveredTab := this._hoveredPanelTab
+        this._hoveredPanelTab := ''
+
+        if this._showInfoPanel && x >= this._partitionX {
+            panelRelativeX := x - this._partitionX
+            panelRelativeY := y - this.bannerHeight
+
+            for rect in this._panelTabRects {
+                if panelRelativeX >= rect.x1 && panelRelativeX <= rect.x2
+                    && panelRelativeY >= rect.y1 && panelRelativeY <= rect.y2 {
+                    this._hoveredPanelTab := rect.tab
+                    break
+                }
+            }
+        }
+
+        if oldHoveredTab != this._hoveredPanelTab {
+            this.__DrawMenu(() => this.__DrawPanelTabs())
+        } else if this.__MouseOverRowOrCloseButton(x, y) {
+            this.__DrawMenu(() {
+                this.__UpdateWindowList()
+            })
+        }
+
+        TrackMouseLeave(hwnd) {
+            TME_LEAVE := 0x00000002
+            size := A_PtrSize = 8 ? 24 : 16     ; TRACKMOUSEEVENT struct size
+
+            tme := Buffer(size, 0)
+            NumPut('UInt', size,        tme, 0) ; cbSize
+            NumPut('UInt', TME_LEAVE,   tme, 4) ; dwFlags
+            NumPut('Ptr',  hwnd,        tme, 8) ; hwndTrack
+            NumPut('UInt', 0,           tme, A_PtrSize = 8 ? 16 : 12)
+            return tme
+        }
+    }
+
+    static __UpdatePanelPreview(window, panelX, startY, panelWidth, panelHeight) {
+        if !WinExist(window.hwnd) {
+            Panel := this._sections['Panel'].graphics
+            x := panelX + this.marginX
+            y := startY + this.marginY
+            Gdip_TextToGraphics(Panel, "Window closed", 'x' x ' y' y ' s16 cFFC0C0C0', 'Arial', panelWidth - (this.marginX * 2), 30)
+            this.__RefreshWindows()
+            this.__ApplySearchFilter()
+            this.__WindowListRefreshUI()
+            return
+        }
+
+        margin := this.marginX
+
+        thumbnail := 0
+        result := DllCall('dwmapi\DwmRegisterThumbnail',
+            'Ptr', this.Menu.Hwnd,
+            'Ptr', window.hwnd,
+            'Ptr*', &thumbnail)
+
+        if result = 0 {
+            WinGetPos(,, &winW, &winH, 'ahk_id ' window.hwnd)
+
+            maxWidth := panelWidth - (margin * 2)
+            maxHeight := panelHeight - (margin * 2)
+
+            sourceAspect := winW / winH
+
+            destWidth := Min(maxWidth, Round(maxHeight * sourceAspect))
+            destHeight := Min(maxHeight, Round(destWidth / sourceAspect))
+
+            destX := this._partitionX + margin + (maxWidth - destWidth) / 2
+            destY := this.bannerHeight + startY + margin + (maxHeight - destHeight) / 2
+
+            props := Buffer(48, 0)
+            NumPut('UInt', 0x1F, props, 0)
+            NumPut('Int', destX, props, 4)
+            NumPut('Int', destY, props, 8)
+            NumPut('Int', destX + destWidth, props, 12)
+            NumPut('Int', destY + destHeight, props, 16)
+            NumPut('Int', 0, props, 20)
+            NumPut('Int', 0, props, 24)
+            NumPut('Int', winW, props, 28)
+            NumPut('Int', winH, props, 32)
+            NumPut('UChar', 255, props, 36)
+            NumPut('Int', 1, props, 40)
+            NumPut('Int', 1, props, 44)
+
+            DllCall('dwmapi\DwmUpdateThumbnailProperties', 'Ptr', thumbnail, 'Ptr', props)
+            this._thumbnail := thumbnail
+        }
+    }
+
+
+    static __UpdatePanelInfo(window, panelX, startY, panelWidth, panelHeight) {
+        if !WinExist(window.hwnd) {
+            Panel := this._sections['Panel'].graphics
+            x := panelX + this.marginX
+            y := startY + this.marginY
+            Gdip_TextToGraphics(Panel, "Window closed", 'x' x ' y' y ' s16 cFFC0C0C0', 'Arial', panelWidth - (this.marginX * 2), 30)
+            this.__RefreshWindows()
+            this.__ApplySearchFilter()
+            this.__WindowListRefreshUI()
+            return
+        }
+
+        Panel := this._sections['Panel'].graphics
+        margin := this.marginX
+        x := panelX + margin
+        y := startY + margin
+
+        lineHeight := 20
+        fontSize := 16
+        maxWidth := panelWidth - (margin * 2)
+
+        headerOptions := Format('x{} s{} Bold c{}', x, fontSize, this.panelHeaderTextColor)
+        descriptionOptions := Format('x{} s{} c{}', (x + 10), fontSize, this.panelBodyTextColor)
+
+        hFont    := Gdip_FontFamilyCreate('Arial')
+        headFont := Gdip_FontCreate(hFont, fontSize + 2, 1)
+        bodyFont := Gdip_FontCreate(hFont, fontSize)
+        windowName := this.__TruncateTextToWidth(window.name, fontSize, maxWidth)
+
+        ; window information
+        options := 'x' x ' y' y ' s' (fontSize + 4) ' Bold cFFFFFFFF'
+        Gdip_TextToGraphics(Panel, windowName ' Information:', options, 'Arial', maxWidth, 30)
+        y += lineHeight * 2
+
+        ; process name
+        CreateHeader('Process:')
+        CreateDescription(window.process)
+
+        ; hwnd
+        CreateHeader('HWND:')
+        CreateDescription(String(window.hwnd))
+
+        ; PID
+        CreateHeader('PID:')
+        CreateDescription(String(WinGetPID(window.hwnd)))
+
+        ; window title
+        CreateHeader('Title:')
+        CreateDescription(window.title)
+
+        ; window dimensions
+        WinGetPos(&winX, &winY, &winW, &winH, 'ahk_id ' window.hwnd)
+
+        ; window size
+        CreateHeader('Size:')
+        CreateDescription(winW 'x' winH)
+
+        ; window position
+        CreateHeader('Position:')
+        CreateDescription(winX ', ' winY)
+
+        ; AlwaysOnTop
+        CreateHeader('AlwaysOnTop:')
+        alwaysOnTop := WinGetAlwaysOnTop(window.hwnd) = 1 ? 'True' : 'False'
+        CreateDescription(alwaysOnTop)
+
+        ; MinMax state
+        CreateHeader('MinMax State:')
+        switch WinGetMinMax(window.hwnd) {
+        case -1: minMaxState := 'Minimized'
+        case 0:  minMaxState := 'Unmaximized'
+        case 1:  minMaxState := 'Maximized'
+        }
+        CreateDescription(minMaxState)
+
+        ; Transparency
+        CreateHeader('Transparency:')
+        alpha := WinGetTransparent(window.hwnd)
+        if alpha = '' {
+            message := 'Could not retrieve transparency level.'
+            CreateDescription(message)
+        } else {
+            percent := (alpha // 255) * 100 . '%'
+            alpha := alpha . ' (0-255)'
+            CreateDescription(alpha, lineHeight)
+            CreateDescription(percent)
+        }
+
+        ; cleanup
+        Gdip_DeleteFont(headFont)
+        Gdip_DeleteFont(bodyFont)
+        Gdip_DeleteFontFamily(hFont)
+
+        ; auxiliary
+        CreateHeader(title) {
+            truncatedTitle := this.__TruncateTextToWidth(title, fontSize, maxWidth, 0.52)
+            options := headerOptions . ' y' y
+            Gdip_TextToGraphics(Panel, truncatedTitle, options, 'Arial', 5000, 40)
+            y += lineHeight
+        }
+
+        CreateDescription(text, yOffset := lineHeight * 2) {
+            truncatedText := this.__TruncateTextToWidth(text, fontSize, maxWidth, 0.52)
+            options := descriptionOptions . ' y' y
+            Gdip_TextToGraphics(Panel, truncatedText, options, 'Arial', 5000, 40)
+            y += yOffset
         }
     }
 
@@ -1144,6 +1437,11 @@ class TaskSwitcher {
         ; having this enabled hides the panel while typing. do I want this enabled?
         ; this._showInfoPanel := this._showInfoPanel && (this.preventResize || this._searchText = this.defaultSearchText)
 
+        tempPanelDisable := !this.preventResize && this._showInfoPanel && (this._searchText != this.placeholderSearchText)
+        if tempPanelDisable {
+            this._showInfoPanel := false
+        }
+
         this.__DrawMenu(() {
             ; this.__UpdateTotalHeight()
             this.__ScrollToSelectedRow()
@@ -1151,6 +1449,10 @@ class TaskSwitcher {
             this.__UpdateWindowList()
             this.__UpdatePanel()
         })
+
+        if tempPanelDisable {
+            this._showInfoPanel := true
+        }
     }
 
     static __ApplySearchFilter() {
@@ -1172,117 +1474,6 @@ class TaskSwitcher {
         return matches
     }
 
-    static __DrawInfoPanel(window, panelX, panelY, panelWidth, panelHeight) {
-        ; Had a scenario where a game spawned a proxy window whenever the game was active, and killed it when it lost focus.
-        ; This prevents checking for window information on a window that no longer exists.
-        Panel := this._sections['Panel'].graphics
-
-        if !WinExist(window.hwnd) {
-            x := panelX + this.marginX
-            y := panelY + this.marginY
-            Gdip_TextToGraphics(Panel, "Window closed", 'x' x ' y' y ' s16 cFFC0C0C0', 'Arial', panelWidth - (this.marginX * 2), 30)
-            this.__RefreshWindows()
-            this.__ApplySearchFilter()
-            this.__WindowListRefreshUI()
-            return
-        }
-
-        margin := this.marginX
-        x := panelX + margin
-        y := panelY + margin    ; should this be this._marginY?
-
-        lineHeight := 20
-        fontSize := 16
-        maxWidth := panelWidth - (margin * 2)
-
-        headerOptions := Format('x{} s{} Bold c{}', x, fontSize, this.panelHeaderTextColor)
-        descriptionOptions := Format('x{} s{} c{}', (x + 10), fontSize, this.panelBodyTextColor)
-
-        hFont    := Gdip_FontFamilyCreate('Arial')
-        headFont := Gdip_FontCreate(hFont, fontSize + 2, 1)
-        bodyFont := Gdip_FontCreate(hFont, fontSize)
-        windowName := this.__TruncateTextToWidth(window.name, fontSize, maxWidth)
-
-        ; window information
-        options := 'x' x ' y' y ' s' (fontSize + 4) ' Bold cFFFFFFFF'
-        Gdip_TextToGraphics(Panel, windowName ' Information:', options, 'Arial', maxWidth, 30)
-        y += lineHeight * 2
-
-        ; process name
-        CreateHeader('Process:')
-        CreateDescription(window.process)
-
-        ; hwnd
-        CreateHeader('HWND:')
-        CreateDescription(String(window.hwnd))
-
-        ; PID
-        CreateHeader('PID:')
-        CreateDescription(String(WinGetPID(window.hwnd)))
-
-        ; window title
-        CreateHeader('Title:')
-        CreateDescription(window.title)
-
-        ; window dimensions
-        WinGetPos(&winX, &winY, &winW, &winH, 'ahk_id ' window.hwnd)
-
-        ; window size
-        CreateHeader('Size:')
-        CreateDescription(winW 'x' winH)
-
-        ; window position
-        CreateHeader('Position:')
-        CreateDescription(winX ', ' winY)
-
-        ; AlwaysOnTop
-        CreateHeader('AlwaysOnTop:')
-        alwaysOnTop := WinGetAlwaysOnTop(window.hwnd) = 1 ? 'True' : 'False'
-        CreateDescription(alwaysOnTop)
-
-
-        ; MinMax state
-        CreateHeader('MinMax State:')
-        switch WinGetMinMax(window.hwnd) {
-        case -1: minMaxState := 'Minimized'
-        case 0:  minMaxState := 'Unmaximized'
-        case 1:  minMaxState := 'Maximized'
-        }
-        CreateDescription(minMaxState)
-
-        ; Transparency
-        CreateHeader('Transparency:')
-        alpha := WinGetTransparent(window.hwnd)
-        if alpha = '' {
-            message := 'Could not retrieve transparency level.'
-            CreateDescription(message)
-        } else {
-            percent := (alpha // 255) * 100 . '%'
-            alpha := alpha . ' (0-255)'
-            CreateDescription(alpha, lineHeight)
-            CreateDescription(percent)
-        }
-
-        ; cleanup
-        Gdip_DeleteFont(headFont)
-        Gdip_DeleteFont(bodyFont)
-        Gdip_DeleteFontFamily(hFont)
-
-        ; auxiliary
-        CreateHeader(title) {
-            truncatedTitle := this.__TruncateTextToWidth(title, fontSize, maxWidth, 0.52)
-            options := headerOptions . ' y' y
-            Gdip_TextToGraphics(Panel, truncatedTitle, options, 'Arial', 5000, 40)
-            y += lineHeight
-        }
-
-        CreateDescription(text, yOffset := lineHeight * 2) {
-            truncatedText := this.__TruncateTextToWidth(text, fontSize, maxWidth, 0.52)
-            options := descriptionOptions . ' y' y
-            Gdip_TextToGraphics(Panel, truncatedText, options, 'Arial', 5000, 40)
-            y += yOffset
-        }
-    }
 
     static __RefreshWindows(options := {}) {
         list := this.__AltTabWindows(options)
@@ -1494,51 +1685,6 @@ class TaskSwitcher {
         }
     }
 
-    static __OnMouseMove(wParam, lParam, msg, hwnd) {
-        static tme := TrackMouseLeave(hwnd)   ; required for OnMouseLeave to work correctly
-
-        if this._mouseLeft {
-            this._mouseLeft := false
-            DllCall('user32.dll\TrackMouseEvent', 'Ptr', tme)
-        }
-
-        x := lParam & 0xFFFF
-        y := lParam >> 16
-
-        if this._clicked.item = 'partition' {
-            this.__OnPartitionMove(x)
-            return
-        } else if this.__IsOnPartition(x, y) {
-            ; change cursor over partition
-            DllCall('SetCursor', 'Ptr', DllCall('LoadCursor', 'Ptr', 0, 'Ptr', 32646))  ; IDC_SIZEWE
-            return
-        }
-
-        if this._clicked.item {
-            return
-        }
-
-        this._canScroll := (y > this.bannerHeight) && x < (this._showInfoPanel ? this._partitionX : this.menuWidth)
-
-        if this.__MouseOverRowOrCloseButton(x, y) {
-            this.__DrawMenu(() {
-                this.__UpdateWindowList()
-            })
-        }
-
-        TrackMouseLeave(hwnd) {
-            TME_LEAVE := 0x00000002
-            size := A_PtrSize = 8 ? 24 : 16    ; TRACKMOUSEEVENT struct size
-
-            tme := Buffer(size, 0)
-            NumPut('UInt', size,        tme, 0) ; cbSize
-            NumPut('UInt', TME_LEAVE,   tme, 4) ; dwFlags
-            NumPut('Ptr',  hwnd,        tme, 8) ; hwndTrack
-            NumPut('UInt', 0,           tme, A_PtrSize = 8 ? 16 : 12)
-            return tme
-        }
-    }
-
     static __OnMouseWheel(wParam, lParam, msg, hwnd) {
         if !this._canScroll || this._clicked.item || this.Menu.windows.length <= this.maxVisibleRows {
             return
@@ -1601,6 +1747,11 @@ class TaskSwitcher {
             return
         }
 
+        if this._hoveredPanelTab {
+            this._clicked.item := this._hoveredPanelTab
+            return
+        }
+
         if this._hoveredCloseButton {
             this._clicked.item := 'close'
             this._clicked.index := this._hoveredCloseButton
@@ -1637,6 +1788,7 @@ class TaskSwitcher {
                 return
             }
 
+            this._clicked.item := ''
             x := lParam & 0xFFFF
             y := lParam >> 16
 
@@ -1645,10 +1797,9 @@ class TaskSwitcher {
                 return
             }
 
-            this._clicked.item := ''
             index := this._clicked.index
 
-            switch item {
+            switch item, 'Off' {
             case 'partition':
                 return
 
@@ -1686,10 +1837,24 @@ class TaskSwitcher {
                     }
                 }
 
-            default:    ; if click canceled with escape key
+            case 'preview', 'info':
+                if this._showInfoPanel && x >= this._partitionX {
+                    panelRelativeX := x - this._partitionX
+                    panelRelativeY := y - this.bannerHeight
+
+                    for rect in this._panelTabRects {
+                        if panelRelativeX >= rect.x1 && panelRelativeX <= rect.x2
+                            && panelRelativeY >= rect.y1 && panelRelativeY <= rect.y2 {
+                            this._panelTab := rect.tab
+                            this.__DrawMenu(() => this.__UpdatePanel())
+                            return
+                        }
+                    }
+                }
+
+            default:
                 return
             }
-
 
             if this.__MouseOverRowOrCloseButton(x, y) {
                 this.__DrawMenu(() {
@@ -1842,8 +2007,8 @@ class TaskSwitcher {
         if newSplitX != this._partitionX {
             this._partitionX := newSplitX
             this.__DrawMenu(() {
-                this._lastPanelWidth := this.menuWidth - newSplitX
-                this._lastWindowListWidth := newSplitX
+                ; this._lastPanelWidth := this.menuWidth - newSplitX
+                ; this._lastWindowListWidth := newSplitX
                 this.__UpdateWindowList()
                 this.__UpdatePanel()
             })
@@ -1968,7 +2133,7 @@ class TaskSwitcher {
             DllCall('GetKeyboardState', 'Ptr', keyState)
 
             ; clear the control key state (VK_CONTROL = 0x11)
-            NumPut('uchar', 0, keyState, 0x11)
+            NumPut('UChar', 0, keyState, 0x11)
 
             ; convert VK to character
             charBuf := Buffer(2, 0)
@@ -2254,6 +2419,13 @@ class TaskSwitcher {
         }
     }
 
+    static __CleanupThumbnail() {
+        if this._thumbnail {
+            DllCall('dwmapi\DwmUnregisterThumbnail', 'Ptr', this._thumbnail)
+            this._thumbnail := 0
+        }
+    }
+
     static __CreateGDIPSection(sectionKey, w, h) {
         section := this._sections.Get(sectionKey, 0)
         if section {
@@ -2335,6 +2507,8 @@ class TaskSwitcher {
         this._x := 0
         this._y := 0
         this._menuHeight := 0
+        this._lastPanelWidth := 0
+        this._lastWindowListWidth := 0
 
         this._scrollOffset := 0
         this._targetScrollOffset := 0
@@ -2350,6 +2524,10 @@ class TaskSwitcher {
         this._scrollTimerActive := false
         this._canScroll := false
         this._showInfoPanel := false
+        this._thumbnail := 0
+        this._panelTab := 'preview'  ; default to preview tab
+        this._panelTabRects := []
+        this._hoveredPanelTab := ''  ; track which tab is being hovered
 
         ; Allows custom name overrides. This exists because I couldn't find Steam's actual DisplayName/ProductName
         ; Key = exe name (excludes .exe) e.g. Steam's .exe name is steamwebhelper.exe so I've added steamwebhelper to the map.

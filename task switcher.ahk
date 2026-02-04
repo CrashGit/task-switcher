@@ -103,7 +103,8 @@ class TaskSwitcher {
            partitionWidth                   := 2,
            maxVisibleRows                   := 8,
            scrollSmoothness                 := 0.35,    ; higher values make it feel snappier and less smooth
-           defaultPanelSizePercent          := 0.3,     ; 0.0-1.0 float
+           scrollPixelOffset                := 40,
+           defaultPanelSizePercent          := 0.5,     ; 0.0-1.0 float
 
            wrapRowSelection                 := true,
            alwaysHighlightFirst             := true,    ; applies to filtering windows when typing
@@ -175,7 +176,7 @@ class TaskSwitcher {
             return
         }
 
-        this.__CleanupThumbnail()
+        this._lastPreviewHwnd := 0
 
         DllCall('ReleaseCapture')
         this._ih.Stop()
@@ -194,12 +195,14 @@ class TaskSwitcher {
         this._hoveredOver := 0
         this._hoveredCloseButton := 0
         this._clicked := {item: '', index: 0}
-        this._searchText := this.placeholderSearchText
         this._mouseLeft := true
+        this._tempDisablePanel := false                 ; needs to come before this._searchText
+        this._userIsTyping := false
         this._showInfoPanel := this.showPanelOnOpen
+        this._searchText := this.placeholderSearchText
 
         this._scrollOffset := 0
-        this._targetScrollOffset := 0    ; reset target
+        this._targetScrollOffset := 0
         this.open := false
     }
 
@@ -271,11 +274,16 @@ class TaskSwitcher {
     }
 
     static TogglePanel() {
+        if this._userIsTyping {
+            return false
+        }
+
         this._showInfoPanel ^= 1
         this.__DrawMenu(() {
             this.__UpdateWindowList()
             this.__UpdatePanel()
         })
+        return true
     }
 
     static OnWindowActivate(Callback) {
@@ -515,11 +523,10 @@ class TaskSwitcher {
         VariousPropertiesSetup() {
             ; this._allWindows := this.__AltTabWindows()
             ; this.Menu.windows := this._allWindows.Clone()
+
             this._showInfoPanel := this.showPanelOnOpen
             this._searchText := this.placeholderSearchText
-            this._listMinWidth := this.menuWidth * 0.2
-            this._infoPanelMinWidth := this.menuWidth * 0.2
-            this._partitionX := this.menuWidth * 0.8
+            ; this._partitionX := this.menuWidth * 0.8
             this._rowNumberWidth := this.rowNumbers ? 30 : 0
             this._titleX := (this.iconSize + (2 * this.marginX)) + (this._rowNumberWidth)
             this._rowWithDivider := this.rowHeight + this.rowDividerHeight
@@ -527,10 +534,13 @@ class TaskSwitcher {
             this.__UpdateTotalHeight()
             this._lastWindowListHeight := this._lastWindowHeight := this._lockedHeight := this._menuHeight
 
-            this._partitionX := Min(Max(
-                this.menuWidth * (1 - this.defaultPanelSizePercent),
-                this._infoPanelMinWidth
-            ), this._listMinWidth)
+            minWidthMultiplier := 0.2   ; window list and panel can't be less than 20% of the menu width
+            minWidthInPixels := this.menuWidth * minWidthMultiplier
+            this._listMinWidth := minWidthInPixels
+            this._infoPanelMinWidth := minWidthInPixels
+
+            upperBounds := Max(this.menuWidth * (1 - this.defaultPanelSizePercent))
+            this._partitionX := Min(upperBounds, this.menuWidth - minWidthInPixels)
         }
 
         SearchBarDimensions() {
@@ -601,7 +611,6 @@ class TaskSwitcher {
         ; this._lastBitmapHeight := this._menuHeight
         ; this._lockedHeight := this._menuHeight
 
-        ; this._lastPanelWidth := this.menuWidth - this._partitionX
         ; this._lastWindowListWidth := this._partitionX
 
         this.__UpdateTotalHeight()      ; necessary for certain this._selectedRow starting values when this.__ScrollToSelectedRow() is called
@@ -659,14 +668,22 @@ class TaskSwitcher {
         this._ih.Stop()
 
         WinClose(window.hwnd)
-        if !WinWaitClose(window.hwnd,, 1) {
+        if !WinWaitClose(window.hwnd,, 3) {
             return
         }
 
         this._ih.Start()
 
-        if this.Menu.windows.Length = 1 {       ; closed the last window
+        ; helps when window list shifts when window is closed and the bottom of a scrollable list is visible
+        switch this.Menu.windows.Length {
+        case 1 + this.maxVisibleRows:
+            this._scrollOffset := 0
+            this._targetScrollOffset := 0
+        case 1:
             this._searchText := this.placeholderSearchText
+        default:
+            rowHeight := this.rowHeight + this.rowDividerHeight
+            this._scrollOffset := Max(0, this._scrollOffset - rowHeight)
         }
 
         this.__RefreshWindows()
@@ -681,7 +698,7 @@ class TaskSwitcher {
             ; show partial row to indicate scrollability
             visibleRows := this.maxVisibleRows - 0.5
             totalDividers := Floor(visibleRows)
-            contentHeight := Integer(visibleRows * this.rowHeight + (totalDividers * this.rowDividerHeight))
+            contentHeight := Round(visibleRows * this.rowHeight + (totalDividers * this.rowDividerHeight))
         } else {
             totalDividers := Max(0, totalRows - 1)
             contentHeight := (totalRows * this.rowHeight) + (totalDividers * this.rowDividerHeight)
@@ -789,6 +806,7 @@ class TaskSwitcher {
             this._lastWindowListHeight := height
             this.__DestroyGDIPSection('WindowList')
             this.__CreateGDIPSection('WindowList', width, height)
+            ; this.__ScrollToSelectedRow()
         }
 
         WindowList := this._sections['WindowList'].graphics
@@ -834,7 +852,10 @@ class TaskSwitcher {
 
         rowX := this.rowNumbers ? 30 : 0
 
+        ; roundedScrollOffset := Round(this._scrollOffset)
+
         for index, window in this.Menu.windows {
+            ; rowY := this.bannerHeight + ((index - 1) * this._rowWithDivider) - roundedScrollOffset
             rowY := this.bannerHeight + ((index - 1) * this._rowWithDivider) - this._scrollOffset
 
             if rowY + this.rowHeight < this.bannerHeight || rowY > height {
@@ -1022,8 +1043,7 @@ class TaskSwitcher {
         width := this.menuWidth - this._partitionX
         height := this._menuHeight - this.bannerHeight
 
-        if width != this._lastPanelWidth {
-            this._lastPanelWidth := width
+        if this._lastWindowListWidth != this._partitionX || height != this._lastWindowListHeight {
             this.__DestroyGDIPSection('Panel')
             this.__CreateGDIPSection('Panel', width, height)
         }
@@ -1058,7 +1078,7 @@ class TaskSwitcher {
         if this._selectedRow > 0 && this._selectedRow <= this.Menu.windows.Length {
             window := this.Menu.windows[this._selectedRow]
 
-            this.__CleanupThumbnail()  ; Clean up before drawing preview
+            ; this.__CleanupThumbnail()  ; Clean up before drawing preview
             if this._panelTab = 'preview' {
                 this.__UpdatePanelPreview(window, 0, tabHeight, width, height - tabHeight)
             } else {
@@ -1194,44 +1214,75 @@ class TaskSwitcher {
             return
         }
 
+        ; if window is minimized, the live preview is shortened but enlarged version of the toolbar which is not what we want
+        if WinGetMinMax(window.hwnd) = -1 {
+            Panel := this._sections['Panel'].graphics
+            availableWidth := panelWidth - (this.marginX * 2)
+            availableHeight := panelHeight - (this.marginY * 2)
+
+            x := panelX + this.marginX
+            y := startY + this.marginY + (availableHeight / 2) - 8
+
+            options := 'x' x ' y' y ' s24 cFFC0C0C0 Center Bold'
+            Gdip_TextToGraphics(Panel, 'Preview not available', options, 'Arial', availableWidth, availableHeight)
+            this.__CleanupThumbnail()
+            return
+        }
+
+        ; check if different window is trying to be shown than previous window
+        if this._lastPreviewHwnd != window.hwnd {
+            this.__CleanupThumbnail()
+            this._lastPreviewHwnd := window.hwnd
+
+            thumbnail := 0
+            try {
+                result := DllCall('dwmapi\DwmRegisterThumbnail',
+                    'Ptr', this.Menu.Hwnd,
+                    'Ptr', window.hwnd,
+                    'Ptr*', &thumbnail)
+            } catch {
+                MsgBox('Preview failed')
+            }
+
+            if result = 0 {
+                this._thumbnail := thumbnail
+            } else {
+                return
+            }
+        }
+
+        WinGetPos(,, &winW, &winH, 'ahk_id ' window.hwnd)   ; get window dimensions for preview
+
         margin := this.marginX
+        maxWidth := panelWidth - (margin * 2)
+        maxHeight := panelHeight - (margin * 2)
 
-        thumbnail := 0
-        result := DllCall('dwmapi\DwmRegisterThumbnail',
-            'Ptr', this.Menu.Hwnd,
-            'Ptr', window.hwnd,
-            'Ptr*', &thumbnail)
+        sourceAspect := winW / winH
 
-        if result = 0 {
-            WinGetPos(,, &winW, &winH, 'ahk_id ' window.hwnd)
+        destWidth := Min(maxWidth, Round(maxHeight * sourceAspect))
+        destHeight := Min(maxHeight, Round(destWidth / sourceAspect))
 
-            maxWidth := panelWidth - (margin * 2)
-            maxHeight := panelHeight - (margin * 2)
+        destX := this._partitionX + margin + (maxWidth - destWidth) / 2
+        destY := this.bannerHeight + startY + margin + (maxHeight - destHeight) / 2
 
-            sourceAspect := winW / winH
+        props := Buffer(48, 0)
+        NumPut('UInt', 0x1F, props, 0)
+        NumPut('Int', destX, props, 4)
+        NumPut('Int', destY, props, 8)
+        NumPut('Int', destX + destWidth, props, 12)
+        NumPut('Int', destY + destHeight, props, 16)
+        NumPut('Int', 0, props, 20)
+        NumPut('Int', 0, props, 24)
+        NumPut('Int', winW, props, 28)
+        NumPut('Int', winH, props, 32)
+        NumPut('UChar', 255, props, 36)
+        NumPut('Int', 1, props, 40)
+        NumPut('Int', 1, props, 44)
 
-            destWidth := Min(maxWidth, Round(maxHeight * sourceAspect))
-            destHeight := Min(maxHeight, Round(destWidth / sourceAspect))
-
-            destX := this._partitionX + margin + (maxWidth - destWidth) / 2
-            destY := this.bannerHeight + startY + margin + (maxHeight - destHeight) / 2
-
-            props := Buffer(48, 0)
-            NumPut('UInt', 0x1F, props, 0)
-            NumPut('Int', destX, props, 4)
-            NumPut('Int', destY, props, 8)
-            NumPut('Int', destX + destWidth, props, 12)
-            NumPut('Int', destY + destHeight, props, 16)
-            NumPut('Int', 0, props, 20)
-            NumPut('Int', 0, props, 24)
-            NumPut('Int', winW, props, 28)
-            NumPut('Int', winH, props, 32)
-            NumPut('UChar', 255, props, 36)
-            NumPut('Int', 1, props, 40)
-            NumPut('Int', 1, props, 44)
-
-            DllCall('dwmapi\DwmUpdateThumbnailProperties', 'Ptr', thumbnail, 'Ptr', props)
-            this._thumbnail := thumbnail
+        try {
+            DllCall('dwmapi\DwmUpdateThumbnailProperties', 'Ptr', this._thumbnail, 'Ptr', props)
+        } catch {
+            MsgBox('DLL update thumbnail properties failed')
         }
     }
 
@@ -1416,13 +1467,23 @@ class TaskSwitcher {
 
     ; parameter only exists for the reason of closing a window, so the nᵗʰ selected window is still selected
     static __WindowListRefreshUI(overrideSelectedRow := false) {
-        ; decide which row to highlight
         totalRows := this.Menu.windows.Length
+
+        ; reset scroll if list was empty and now has results
+        if this._lastWindowCount = 0 && totalRows > 0 {
+            this._scrollOffset := 0
+            this._targetScrollOffset := 0
+        }
+
+        this._lastWindowCount := totalRows
 
         if this.alwaysHighlightFirst && !overrideSelectedRow {
             this._selectedRow := 1
-        } else if this._selectedRow > totalRows {
-            this._selectedRow := Max(1, totalRows)
+        } else {
+            totalRows := this.Menu.windows.Length
+            if this._selectedRow > totalRows {
+                this._selectedRow := totalRows
+            }
         }
 
         if this.preventResize {
@@ -1437,22 +1498,13 @@ class TaskSwitcher {
         ; having this enabled hides the panel while typing. do I want this enabled?
         ; this._showInfoPanel := this._showInfoPanel && (this.preventResize || this._searchText = this.defaultSearchText)
 
-        tempPanelDisable := !this.preventResize && this._showInfoPanel && (this._searchText != this.placeholderSearchText)
-        if tempPanelDisable {
-            this._showInfoPanel := false
-        }
-
         this.__DrawMenu(() {
             ; this.__UpdateTotalHeight()
-            this.__ScrollToSelectedRow()
             this.__UpdateSearchBar()
             this.__UpdateWindowList()
+            this.__ScrollToSelectedRow()
             this.__UpdatePanel()
         })
-
-        if tempPanelDisable {
-            this._showInfoPanel := true
-        }
     }
 
     static __ApplySearchFilter() {
@@ -1686,7 +1738,7 @@ class TaskSwitcher {
     }
 
     static __OnMouseWheel(wParam, lParam, msg, hwnd) {
-        if !this._canScroll || this._clicked.item || this.Menu.windows.length <= this.maxVisibleRows {
+        if !this._canScroll || this._clicked.item {
             return
         }
 
@@ -1696,20 +1748,16 @@ class TaskSwitcher {
             wheelDelta := wheelDelta - 0x10000
         }
 
-        ; update target scroll position
-        scrollAmount := 40
-
         if wheelDelta > 0 {
-            this._targetScrollOffset -= scrollAmount
+            this._targetScrollOffset -= this.scrollPixelOffset
         } else {
-            this._targetScrollOffset += scrollAmount
+            this._targetScrollOffset += this.scrollPixelOffset
         }
 
         ; clamp target
-        this._rowWithDivider := this.rowHeight + this.rowDividerHeight
-        totalContentHeight := this.Menu.windows.Length * this._rowWithDivider
-        visibleHeight := this._menuHeight - this.bannerHeight
-        maxScrollPixels := Max(0, totalContentHeight - visibleHeight)
+        maxScrollPixels := this.__GetMaxScrollPixels(
+            this.Menu.windows.Length * this._rowWithDivider - this.rowDividerHeight,
+            this._menuHeight - this.bannerHeight)
         this._targetScrollOffset := Max(0, Min(this._targetScrollOffset, maxScrollPixels))
 
         ; start animation if not already running
@@ -1726,10 +1774,10 @@ class TaskSwitcher {
 
         switch this._searchText {
         case '':
-            this._searchText := this.placeholderSearchText
-            this.__DrawMenu(() {
-                this.__UpdateSearchBar()
-            })
+            ; this._searchText := this.placeholderSearchText
+            ; this.__DrawMenu(() {
+            ;     this.__UpdateSearchBar()
+            ; })
 
         case this.placeholderSearchText:
             rect := this._searchBarRect
@@ -1749,6 +1797,7 @@ class TaskSwitcher {
 
         if this._hoveredPanelTab {
             this._clicked.item := this._hoveredPanelTab
+            ; this._clicked.index :=
             return
         }
 
@@ -1845,6 +1894,9 @@ class TaskSwitcher {
                     for rect in this._panelTabRects {
                         if panelRelativeX >= rect.x1 && panelRelativeX <= rect.x2
                             && panelRelativeY >= rect.y1 && panelRelativeY <= rect.y2 {
+                            if item != 'preview' {
+                                this.__CleanupThumbnail()
+                            }
                             this._panelTab := rect.tab
                             this.__DrawMenu(() => this.__UpdatePanel())
                             return
@@ -2007,8 +2059,6 @@ class TaskSwitcher {
         if newSplitX != this._partitionX {
             this._partitionX := newSplitX
             this.__DrawMenu(() {
-                ; this._lastPanelWidth := this.menuWidth - newSplitX
-                ; this._lastWindowListWidth := newSplitX
                 this.__UpdateWindowList()
                 this.__UpdatePanel()
             })
@@ -2021,7 +2071,7 @@ class TaskSwitcher {
         if !this.open {
             ToolTip('key: ' key)
             SetTimer(ToolTip, -1000)
-            this.ih.Stop()
+            this._ih.Stop()
             return
         }
 
@@ -2064,7 +2114,8 @@ class TaskSwitcher {
                     }
                 }
 
-                this.Menu.windows := this._allWindows.Clone()
+                ; this.Menu.windows := this._allWindows.Clone()
+                this.__ApplySearchFilter()
                 this.__WindowListRefreshUI()
             }
 
@@ -2094,13 +2145,15 @@ class TaskSwitcher {
             return
 
         case 'Tab':
-            temp := this._clicked.item
-            this._clicked.item := 'PanelIcon'
-            this.__DrawMenu(() => this.__UpdatePanelIcon())
-            this.TogglePanel()
-            Sleep(100)
-            this._clicked.item := temp
-            this.__DrawMenu(() => this.__UpdatePanelIcon())
+            if !this._userIsTyping {
+                temp := this._clicked.item
+                this._clicked.item := 'PanelIcon'
+                this.__DrawMenu(() => this.__UpdatePanelIcon())
+                this.TogglePanel()
+                Sleep(100)
+                this._clicked.item := temp
+                this.__DrawMenu(() => this.__UpdatePanelIcon())
+            }
             return
 
         default:
@@ -2166,9 +2219,15 @@ class TaskSwitcher {
             this._scrollOffset += diff * this.scrollSmoothness
         }
 
+        ; visibleHeight := this._menuHeight - this.bannerHeight
+        ; totalContentHeight := this.Menu.windows.Length * (this.rowHeight + this.rowDividerHeight)
+        ; if totalContentHeight <= visibleHeight {
+        ;     this._scrollOffset := 0
+        ; }
+
         this.__DrawMenu(() {
-            this.__UpdateWindowList()
             this.__UpdateHoverFromMouse()
+            this.__UpdateWindowList()
         })
     }
 
@@ -2205,7 +2264,6 @@ class TaskSwitcher {
     }
 
     static __Scroll(amount) {
-        this._rowWithDivider := this.rowHeight + this.rowDividerHeight
         totalContentHeight := this.Menu.windows.Length * this._rowWithDivider
         visibleHeight := this._menuHeight - this.bannerHeight
         maxScrollPixels := Max(0, totalContentHeight - visibleHeight)
@@ -2245,10 +2303,15 @@ class TaskSwitcher {
         }
 
         ClampOffset(offset) {
-            totalContentHeight := this.Menu.windows.Length * this._rowWithDivider
-            maxScrollPixels := Max(0, totalContentHeight - visibleHeight)
+            maxScrollPixels := this.__GetMaxScrollPixels(
+                this.Menu.windows.Length * this._rowWithDivider,
+                visibleHeight)
             return Min(offset, maxScrollPixels)
         }
+    }
+
+    static __GetMaxScrollPixels(totalContentHeight, visibleHeight) {
+        return Max(0, totalContentHeight - visibleHeight)
     }
 
     static __ColorBrightnessAutoAdjust(color, offset := 60) {
@@ -2424,6 +2487,7 @@ class TaskSwitcher {
             DllCall('dwmapi\DwmUnregisterThumbnail', 'Ptr', this._thumbnail)
             this._thumbnail := 0
         }
+        this._lastPreviewHwnd := 0
     }
 
     static __CreateGDIPSection(sectionKey, w, h) {
@@ -2507,7 +2571,6 @@ class TaskSwitcher {
         this._x := 0
         this._y := 0
         this._menuHeight := 0
-        this._lastPanelWidth := 0
         this._lastWindowListWidth := 0
 
         this._scrollOffset := 0
@@ -2528,6 +2591,37 @@ class TaskSwitcher {
         this._panelTab := 'preview'  ; default to preview tab
         this._panelTabRects := []
         this._hoveredPanelTab := ''  ; track which tab is being hovered
+        this._lastPreviewHwnd := 0
+        this._lastWindowCount := 0
+
+        this._userIsTyping := false
+        this._tempDisablePanel := false
+        this._private_searchText := ''
+
+        this.DefineProp('_searchText', {
+            Get: (self) => this._private_searchText,
+            Set: (self, value) {
+                this._private_searchText := value
+
+                emptySearchField := this._private_searchText = this.placeholderSearchText || this._private_searchText = ''
+
+                if !emptySearchField {
+                    this._userIsTyping := true
+
+                    if this._showInfoPanel {
+                        this._tempDisablePanel := true
+                        this._showInfoPanel := false
+                    }
+                } else if this._userIsTyping {
+                    this._userIsTyping := false
+
+                    if this._tempDisablePanel {
+                        this._showInfoPanel := true
+                        this._tempDisablePanel := false
+                    }
+                }
+            }
+        })
 
         ; Allows custom name overrides. This exists because I couldn't find Steam's actual DisplayName/ProductName
         ; Key = exe name (excludes .exe) e.g. Steam's .exe name is steamwebhelper.exe so I've added steamwebhelper to the map.

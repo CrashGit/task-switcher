@@ -23,7 +23,7 @@ TraySetIcon('shell32.dll', 90)
 ; @TaskSwitcher
 ;============================================================================================
 class TaskSwitcher {
-    ; @options that can be changed here or used as a property name when passing options to TaskSwitcher({option: value})
+    ; @OPTIONS that can be changed here or used as a property name when passing options to TaskSwitcher({option: value})
     ; Note - Options that go through Gdip_TextToGraphics require ARGB format as a string (e.g. 'FF00FF00' is an opaque green)
     ;        while other color options use a 0xARGB (hex) number (e.g. 0xFF00FF00 is opaque green).
     ;        I have made it so all explicit colors passed use 0xARGB. The appropriate options are converted to their naturally-accepted format.
@@ -117,6 +117,7 @@ class TaskSwitcher {
            closeOnOutsideClick              := true,    ; closes the menu if you click with any mouse button outside the menu
            clickPassthrough                 := false,
            rowNumbers                       := true,
+           mouseRowHoverUpdatesPanel        := true,
 
 
         /**
@@ -176,7 +177,7 @@ class TaskSwitcher {
             return
         }
 
-        this._lastPreviewHwnd := 0
+        Critical(10)    ; attempt to prevent scenarios where computer is under heavy load (like a game running) and inputhook isn't stopped for some reason
 
         DllCall('ReleaseCapture')
         this._ih.Stop()
@@ -191,6 +192,8 @@ class TaskSwitcher {
         OnMessage(0x207, this._OnMiddleClick, 0)
         OnMessage(0x208, this._OnMiddleClickRelease, 0)
 
+        this._lastUsedDevice := 'keyboard'
+        this._lastPreviewHwnd := 0
         this._windowRects := []
         this._hoveredOver := 0
         this._hoveredCloseButton := 0
@@ -204,6 +207,7 @@ class TaskSwitcher {
         this._scrollOffset := 0
         this._targetScrollOffset := 0
         this.open := false
+        Critical('Off')
     }
 
     static ActivateWindowAndCloseMenu(selectedRow := this._selectedRow) {
@@ -229,7 +233,7 @@ class TaskSwitcher {
             return  ; returns if no changes were made
         }
 
-        this.__ScrollToSelectedRow()
+        this.__KeepSelectedRowVisible()
         this.__DrawMenu(() {
             this.__UpdateWindowList()
             this.__UpdatePanel()
@@ -245,7 +249,7 @@ class TaskSwitcher {
             return  ; returns if no changes were made
         }
 
-        this.__ScrollToSelectedRow()
+        this.__KeepSelectedRowVisible()
         this.__DrawMenu(() {
             this.__UpdateWindowList()
             this.__UpdatePanel()
@@ -255,7 +259,7 @@ class TaskSwitcher {
     static SelectFirstRow() {
         if this._selectedRow != 1 {
             this._selectedRow := 1
-            this.__ScrollToSelectedRow()
+            this.__KeepSelectedRowVisible()
             this.__DrawMenu(() {
                 this.__UpdateWindowList()
             })
@@ -266,7 +270,7 @@ class TaskSwitcher {
         last := this.Menu.windows.Length
         if this._selectedRow != last {
             this._selectedRow := last
-            this.__ScrollToSelectedRow()
+            this.__KeepSelectedRowVisible()
             this.__DrawMenu(() {
                 this.__UpdateWindowList()
             })
@@ -614,7 +618,7 @@ class TaskSwitcher {
         ; this._lastWindowListWidth := this._partitionX
 
         this.__UpdateTotalHeight()      ; necessary for certain this._selectedRow starting values when this.__ScrollToSelectedRow() is called
-        this.__ScrollToSelectedRow()
+        this.__KeepSelectedRowVisible()
         this.__DrawMenu()
 
         switch this.coordinates {
@@ -806,7 +810,6 @@ class TaskSwitcher {
             this._lastWindowListHeight := height
             this.__DestroyGDIPSection('WindowList')
             this.__CreateGDIPSection('WindowList', width, height)
-            ; this.__ScrollToSelectedRow()
         }
 
         WindowList := this._sections['WindowList'].graphics
@@ -852,10 +855,7 @@ class TaskSwitcher {
 
         rowX := this.rowNumbers ? 30 : 0
 
-        ; roundedScrollOffset := Round(this._scrollOffset)
-
         for index, window in this.Menu.windows {
-            ; rowY := this.bannerHeight + ((index - 1) * this._rowWithDivider) - roundedScrollOffset
             rowY := this.bannerHeight + ((index - 1) * this._rowWithDivider) - this._scrollOffset
 
             if rowY + this.rowHeight < this.bannerHeight || rowY > height {
@@ -893,14 +893,25 @@ class TaskSwitcher {
         }
 
         DrawWindowText(index, window) {
-            switch index {
-            case this._hoveredOver:
+            sameRow := this._hoveredOver = this._selectedRow
+            if sameRow {
+                mouse := this._lastUsedDevice = 'mouse'
+                if mouse && this._hoveredOver = index {
+                    textColor := this._clicked.item = 'row'
+                        ? this.mouseRowSelectedTextColor
+                        : this.mouseRowHoverTextColor
+                } else if this._selectedRow = index {
+                    textColor := this.rowSelectedTextColor
+                } else {
+                    textColor := this.rowTextColor
+                }
+            } else if this._hoveredOver = index {
                 textColor := this._clicked.item = 'row'
                     ? this.mouseRowSelectedTextColor
                     : this.mouseRowHoverTextColor
-            case this._selectedRow:
+            } else if this._selectedRow = index {
                 textColor := this.rowSelectedTextColor
-            default:
+            } else {
                 textColor := this.rowTextColor
             }
 
@@ -933,7 +944,21 @@ class TaskSwitcher {
 
             if clickedIndex = index {
                 HighlightRow(this.mouseRowSelectedBackgroundColor)
-            } else if this._hoveredOver = index {
+                return
+            }
+
+            sameRow := this._hoveredOver = this._selectedRow
+            if sameRow {
+                mouse := this._lastUsedDevice = 'mouse'
+                if mouse && this._hoveredOver = index {
+                    HighlightRow(this.mouseRowHoverBackgroundColor)
+                } else if this._selectedRow = index {
+                    HighlightRow(this.rowSelectedColor)
+                }
+                return
+            }
+
+            if this._hoveredOver = index {
                 HighlightRow(this.mouseRowHoverBackgroundColor)
             } else if this._selectedRow = index {
                 HighlightRow(this.rowSelectedColor)
@@ -1075,10 +1100,12 @@ class TaskSwitcher {
 
         ; draw tab content
         tabHeight := 40
-        if this._selectedRow > 0 && this._selectedRow <= this.Menu.windows.Length {
-            window := this.Menu.windows[this._selectedRow]
+        useMousedRow := this.mouseRowHoverUpdatesPanel && this._lastUsedDevice = 'mouse' && this._hoveredOver
+        row := useMousedRow ? this._hoveredOver : this._selectedRow
 
-            ; this.__CleanupThumbnail()  ; Clean up before drawing preview
+        if row > 0 && row <= this.Menu.windows.Length {
+            window := this.Menu.windows[row]
+
             if this._panelTab = 'preview' {
                 this.__UpdatePanelPreview(window, 0, tabHeight, width, height - tabHeight)
             } else {
@@ -1096,7 +1123,7 @@ class TaskSwitcher {
 
         spacing := this.marginX
         partitionSize := this.partitionWidth / 2
-        y := this.marginY + partitionSize
+        y := this.marginY + (partitionSize * 2)
 
         ; available space for tabs (minus partition and margins)
         availableWidth := width - partitionSize - (spacing * 3)     ; left margin, between, right margin
@@ -1107,24 +1134,13 @@ class TaskSwitcher {
             offset := index = 1 ? partitionSize : 0
             x := offset + spacing + ((index - 1) * (tabWidth + spacing))
 
-            isActive := (this._panelTab = (index = 1 ? 'preview' : 'info'))
-            isHovered := this._hoveredPanelTab = (index = 1 ? 'preview' : 'info')
-
-            if isHovered {
-                bgColor := this.__ColorBrightnessAutoAdjust(this.panelBackgroundColor, 100)
-                pBrush := Gdip_BrushCreateSolid(bgColor)
-            } else if isActive {
-                bgColor := this.__ColorBrightnessAutoAdjust(this.panelBackgroundColor, 80)
-                pBrush := Gdip_BrushCreateSolid(bgColor)
-            } else {
-                bgColor := this.__ColorBrightnessAutoAdjust(this.panelBackgroundColor, 60)
-                pBrush := Gdip_BrushCreateSolid(bgColor)
-            }
-
+            colorAdjustment := GetColorAdjustmentValue(index, tabName)
+            bgColor := this.__ColorBrightnessAutoAdjust(this.panelBackgroundColor, colorAdjustment)
+            pBrush := Gdip_BrushCreateSolid(bgColor)
             Gdip_FillRoundedRectangle(Panel, pBrush, x, y, tabWidth, tabHeight - this.marginY, 6)
             Gdip_DeleteBrush(pBrush)
 
-            textColor := isActive ? this.panelHeaderTextColor : this.panelBodyTextColor
+            textColor := this.rowTextColor
             options := 'x' x ' y' (y + 6) ' s14 Bold c' textColor ' Center'
             Gdip_TextToGraphics(Panel, tabName, options, 'Arial', tabWidth, tabHeight - (y * 2))
 
@@ -1132,12 +1148,24 @@ class TaskSwitcher {
                 x1:  x,
                 y1:  y,
                 x2:  x + tabWidth,
-                y2:  tabHeight,
+                y2:  y + (tabHeight - this.marginY),
                 tab: tabName
             })
         }
 
         Gdip_SetSmoothingMode(Panel, oldMode)
+
+        GetColorAdjustmentValue(index, tabName) {
+            if this._clicked.item = tabName {                                       ; tab is clicked
+                return 120
+            } else if this._hoveredPanelTab = (index = 1 ? 'preview' : 'info') {    ; tab is hovered
+                return 100
+            } else if this._panelTab = (index = 1 ? 'preview' : 'info') {           ; tab is active
+                return 80
+            } else {
+                return 60
+            }
+        }
     }
 
     static __OnMouseMove(wParam, lParam, msg, hwnd) {
@@ -1153,6 +1181,7 @@ class TaskSwitcher {
 
         if this._clicked.item = 'partition' {
             this.__OnPartitionMove(x)
+            DllCall('SetCursor', 'Ptr', DllCall('LoadCursor', 'Ptr', 0, 'Ptr', 32646))
             return
         } else if this.__IsOnPartition(x, y) {
             DllCall('SetCursor', 'Ptr', DllCall('LoadCursor', 'Ptr', 0, 'Ptr', 32646))
@@ -1164,9 +1193,32 @@ class TaskSwitcher {
         }
 
         this._canScroll := (y > this.bannerHeight) && x < (this._showInfoPanel ? this._partitionX : this.menuWidth)
+        if (y > this.bannerHeight) && x < (this._showInfoPanel ? this._partitionX : this.menuWidth) {
+            this._hoveredPanelTab := ''
+            this._canScroll := true
+
+            if this.__MouseOverRowOrCloseButton(x, y) {
+                this._lastUsedDevice := 'mouse'
+                this.__DrawMenu(() {
+                    this.__UpdateWindowList()
+                    if this.mouseRowHoverUpdatesPanel {
+                        this.__UpdatePanel
+                    }
+                })
+            }
+            return
+        }
+
+        this._canScroll := false
+        this._hoveredCloseButton := 0
+        if this._hoveredOver {
+            this._hoveredOver := 0
+            this.__DrawMenu(() {
+                this.__UpdateWindowList()
+            })
+        }
 
         oldHoveredTab := this._hoveredPanelTab
-        this._hoveredPanelTab := ''
 
         if this._showInfoPanel && x >= this._partitionX {
             panelRelativeX := x - this._partitionX
@@ -1176,17 +1228,17 @@ class TaskSwitcher {
                 if panelRelativeX >= rect.x1 && panelRelativeX <= rect.x2
                     && panelRelativeY >= rect.y1 && panelRelativeY <= rect.y2 {
                     this._hoveredPanelTab := rect.tab
+                    hoveredTab := true
                     break
                 }
             }
         }
 
-        if oldHoveredTab != this._hoveredPanelTab {
+        if !IsSet(hoveredTab) {
+            this._hoveredPanelTab := ''
             this.__DrawMenu(() => this.__DrawPanelTabs())
-        } else if this.__MouseOverRowOrCloseButton(x, y) {
-            this.__DrawMenu(() {
-                this.__UpdateWindowList()
-            })
+        } else if oldHoveredTab != this._hoveredPanelTab {
+            this.__DrawMenu(() => this.__DrawPanelTabs())
         }
 
         TrackMouseLeave(hwnd) {
@@ -1382,14 +1434,14 @@ class TaskSwitcher {
 
         ; auxiliary
         CreateHeader(title) {
-            truncatedTitle := this.__TruncateTextToWidth(title, fontSize, maxWidth, 0.52)
+            truncatedTitle := this.__TruncateTextToWidth(title, fontSize, maxWidth)
             options := headerOptions . ' y' y
             Gdip_TextToGraphics(Panel, truncatedTitle, options, 'Arial', 5000, 40)
             y += lineHeight
         }
 
         CreateDescription(text, yOffset := lineHeight * 2) {
-            truncatedText := this.__TruncateTextToWidth(text, fontSize, maxWidth, 0.52)
+            truncatedText := this.__TruncateTextToWidth(text, fontSize, maxWidth)
             options := descriptionOptions . ' y' y
             Gdip_TextToGraphics(Panel, truncatedText, options, 'Arial', 5000, 40)
             y += yOffset
@@ -1502,7 +1554,7 @@ class TaskSwitcher {
             ; this.__UpdateTotalHeight()
             this.__UpdateSearchBar()
             this.__UpdateWindowList()
-            this.__ScrollToSelectedRow()
+            this.__KeepSelectedRowVisible()
             this.__UpdatePanel()
         })
     }
@@ -1797,6 +1849,7 @@ class TaskSwitcher {
 
         if this._hoveredPanelTab {
             this._clicked.item := this._hoveredPanelTab
+            this.__DrawMenu(() => this.__DrawPanelTabs())
             ; this._clicked.index :=
             return
         }
@@ -1832,6 +1885,7 @@ class TaskSwitcher {
 
         LeftClickRelease() {
             item := this._clicked.item
+            ; this._panelTab := ''
 
             if !item {
                 return
@@ -1842,9 +1896,9 @@ class TaskSwitcher {
             y := lParam >> 16
 
             ; released outside the bounds
-            if x < 0 || x > this.menuWidth || y < 0 || y > this._menuHeight {
-                return
-            }
+            ; if x < 0 || x > this.menuWidth || y < 0 || y > this._menuHeight {
+            ;     return
+            ; }
 
             index := this._clicked.index
 
@@ -1894,14 +1948,24 @@ class TaskSwitcher {
                     for rect in this._panelTabRects {
                         if panelRelativeX >= rect.x1 && panelRelativeX <= rect.x2
                             && panelRelativeY >= rect.y1 && panelRelativeY <= rect.y2 {
+                            this._panelTab := rect.tab
                             if item != 'preview' {
                                 this.__CleanupThumbnail()
                             }
-                            this._panelTab := rect.tab
-                            this.__DrawMenu(() => this.__UpdatePanel())
+                            this.__DrawMenu(() {
+                                this.__UpdatePanel()
+                            })
                             return
                         }
                     }
+
+                    if this._hoveredPanelTab {
+                        this._hoveredPanelTab := ''
+                        this.__DrawMenu(() {
+                            this.__DrawPanelTabs()
+                        })
+                    }
+                    return
                 }
 
             default:
@@ -1971,28 +2035,36 @@ class TaskSwitcher {
 
     static __ResetClickedAndHoveredItems(*) {
         this._mouseLeft := true
-        this._hoveredOver := 0
-        this._hoveredCloseButton := 0
-        item := this._clicked.item
 
-        if item {
-            this._clicked.item := ''
+        hovered := this._hoveredOver || this._hoveredCloseButton
+        if hovered {
+            this._hoveredOver := 0
+            this._hoveredCloseButton := 0
 
-            switch item {
-            case 'close', 'row':
-                CoordMode('Mouse', 'Window')
-                MouseGetPos(&x, &y)
-                if this.__MouseOverRowOrCloseButton(x, y) {
-                    this.__DrawMenu(() {
-                        this.__UpdateWindowList()
-                    })
-                }
-            case 'panelIcon':
-                this.__DrawMenu(() {
-                    this.__UpdatePanelIcon()
-                })
-            }
+            this.__DrawMenu(() {
+                this.__UpdateWindowList()
+            })
         }
+
+        ; item := this._clicked.item
+        ; if item {
+        ;     ; this._clicked := {item: '', index: 0}
+
+        ;     switch item {
+        ;     case 'close', 'row':
+        ;         CoordMode('Mouse', 'Window')
+        ;         MouseGetPos(&x, &y)
+        ;         if this.__MouseOverRowOrCloseButton(x, y) {
+        ;             this.__DrawMenu(() {
+        ;                 this.__UpdateWindowList()
+        ;             })
+        ;         }
+        ;     case 'panelIcon':
+        ;         this.__DrawMenu(() {
+        ;             this.__UpdatePanelIcon()
+        ;         })
+        ;     }
+        ; }
     }
 
     static __MouseOverRowOrCloseButton(x, y) {
@@ -2122,18 +2194,22 @@ class TaskSwitcher {
             return
 
         case 'Home':
+            this._lastUsedDevice := 'keyboard'
             this.SelectFirstRow()
             return
 
         case 'End':
+            this._lastUsedDevice := 'keyboard'
             this.SelectLastRow()
             return
 
         case 'Up':
+            this._lastUsedDevice := 'keyboard'
             this.SelectPreviousWindow()
             return
 
         case 'Down':
+            this._lastUsedDevice := 'keyboard'
             this.SelectNextWindow()
             return
 
@@ -2286,7 +2362,7 @@ class TaskSwitcher {
         }
     }
 
-    static __ScrollToSelectedRow() {
+    static __KeepSelectedRowVisible() {
         visibleHeight := this._menuHeight - this.bannerHeight
 
         ; scroll if selected row is above visible area
@@ -2365,31 +2441,73 @@ class TaskSwitcher {
         DllCall('dwmapi.dll\DwmExtendFrameIntoClientArea', 'Ptr', hwnd, 'Ptr', margins)
     }
 
-    static __TruncateTextToWidth(text, fontSize, maxPixelWidth, variation := 0.45) {
+    static __TruncateTextToWidth(text, fontSize, maxPixelWidth, fontName := 'Arial') {
         if maxPixelWidth <= 0 {
             return ''
         }
 
-        ; rough estimate: at 16-18px, most monospace chars are ~10px, sans-serif ~8-9px
-        ; this is conservative to ensure we don't overflow
-        estimatedCharWidth := fontSize * variation
-        maxChars := Floor(maxPixelWidth / estimatedCharWidth)
-
-        if StrLen(text) <= maxChars {
+        if StrLen(text) = 0 {
             return text
         }
 
-        ; truncate and add ellipsis
-        truncated := SubStr(text, 1, maxChars - 1) . '…'
-        return truncated
+        ; create temporary bitmap/graphics for measuring
+        tempBitmap := Gdip_CreateBitmap(maxPixelWidth + 100, fontSize + 20)
+        tempGraphics := Gdip_GraphicsFromImage(tempBitmap)
+
+        hFont := Gdip_FontFamilyCreate(fontName)
+        pFont := Gdip_FontCreate(hFont, fontSize, 1)
+        hFormat := Gdip_StringFormatCreate()
+
+        RectF := Buffer(16)
+        NumPut('Float', 0, RectF, 0)
+        NumPut('Float', 0, RectF, 4)
+        NumPut('Float', maxPixelWidth + 100, RectF, 8)
+        NumPut('Float', fontSize + 20, RectF, 12)
+
+        ; measure full text and extract width
+        result := Gdip_MeasureString(tempGraphics, text, pFont, hFormat, &RectF)
+        width := StrSplit(result, '|')[3]
+
+        if width <= maxPixelWidth {
+            Cleanup()
+            return text
+        }
+
+        ; binary search for longest string that fits
+        low := 1
+        high := StrLen(text) - 1
+        best := 1
+
+        while low <= high {
+            mid := (low + high) // 2
+            testText := SubStr(text, 1, mid) . '…'
+            result := Gdip_MeasureString(tempGraphics, testText, pFont, hFormat, &RectF)
+            testWidth := StrSplit(result, '|')[3]
+
+            if testWidth <= maxPixelWidth {
+                best := mid
+                low := mid + 1
+            } else {
+                high := mid - 1
+            }
+        }
+
+        Cleanup()
+        return SubStr(text, 1, best) . '…'
+
+        Cleanup() {
+            Gdip_DeleteStringFormat(hFormat)
+            Gdip_DeleteFont(pFont)
+            Gdip_DeleteFontFamily(hFont)
+            Gdip_DeleteGraphics(tempGraphics)
+            Gdip_DisposeImage(tempBitmap)
+        }
     }
 
     /**
      * @author iseahound
      * @source - https://www.autohotkey.com/boards/viewtopic.php?f=83&p=566016#p566016
      * Modified
-     * @param {(hwnd) => Boolean} WindowFilter
-     * @param {String} excludedWindows uses WinTitle criteria syntax
      * @returns {Array}
      */
     static __AltTabWindows(options) {
@@ -2593,6 +2711,7 @@ class TaskSwitcher {
         this._hoveredPanelTab := ''  ; track which tab is being hovered
         this._lastPreviewHwnd := 0
         this._lastWindowCount := 0
+        this._lastUsedDevice := 'keyboard'
 
         this._userIsTyping := false
         this._tempDisablePanel := false

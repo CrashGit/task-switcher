@@ -41,13 +41,13 @@ You can type to search through the open programs and get to what you need even f
 
 
 ##### Example image using default options (not pretty because the colors are auto-determined):
-![](https://github.com/CrashGit/task-switcher/blob/main/default-example.png)
+![img](https://github.com/CrashGit/task-switcher/blob/refactor/default-example.png)
 
 ##### Example image using customization options in the example file:
-![](https://github.com/CrashGit/task-switcher/blob/main/customization-example.png)
+![img](https://github.com/CrashGit/task-switcher/blob/refactor/customization-example.png)
 
 ##### Example image using customizations options haphazardly:
-![](https://github.com/CrashGit/task-switcher/blob/main/customization-example2.png)
+![img](https://github.com/CrashGit/task-switcher/blob/refactor/customization-example2.png)
 
 
 ## Features

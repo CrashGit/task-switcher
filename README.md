@@ -44,10 +44,10 @@ You can type to search through the open programs and get to what you need even f
 ![img](https://github.com/CrashGit/task-switcher/blob/refactor/default-example.png)
 
 ##### Example image using customization options in the example file:
-![img](https://github.com/CrashGit/task-switcher/blob/refactor/customization-example.png)
+![img](https://github.com/CrashGit/task-switcher/blob/refactor/customized-example.png)
 
 ##### Example image using customizations options haphazardly:
-![img](https://github.com/CrashGit/task-switcher/blob/refactor/customization-example2.png)
+![img](https://github.com/CrashGit/task-switcher/blob/refactor/customized-example2.png)
 
 
 ## Features

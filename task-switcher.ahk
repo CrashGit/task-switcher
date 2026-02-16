@@ -29,7 +29,7 @@ class TaskSwitcher {
     ;        I have made it so all explicit colors passed use 0xARGB. The appropriate options are converted to their naturally-accepted format.
 
     /**
-     * Most colors can be set to 'Auto' except rowBackgroundColor and topbarColor
+     * Most colors can be set to 'Auto' except mainColor and topbarColor
      *
      * When set to auto, all colors use the background they're on to determine their color.
      * However, some colors like texts and the panel icon lines will be set to black or white to ensure high constrast.
@@ -40,7 +40,7 @@ class TaskSwitcher {
      * No considerations are done if more than two colors are supplied, you must use your own judgement if the text visibility is good enough for you.
      * Those options that support gradients are: rowSelectedColor, mouseRowSelectedBackgroundColor, and mouseRowHoverBackgroundColor
      */
-    static rowBackgroundColor               := 'Auto',
+    static mainColor                        := 'Auto',
            rowTextColor                     := 'Auto',
            rowSelectedColor                 := 'Auto',
            rowSelectedTextColor             := 'Auto',
@@ -65,7 +65,12 @@ class TaskSwitcher {
            panelIconLinesColor              := 'Auto',
            partitionColor                   := 'Auto',
 
-           monitor                          := MonitorGetPrimary(),     ; any valid number that represents a monitor you have (can use MonitorGetCount() to find out the the max)
+           panelTabActiveColor              := 'Auto',
+           panelTabInactiveColor            := 'Auto',
+           panelTabTextColor                := 'Auto',
+           panelTabHoverColor               := 'Auto',
+           panelTabSelectedColor            := 'Auto',
+
            marginX                          := 12,
            marginY                          := 12,
            menuWidth                        := 1000,
@@ -75,14 +80,15 @@ class TaskSwitcher {
            closeButtonSize                  := 24,
            partitionWidth                   := 2,
            maxVisibleRows                   := 12,
+           defaultPanelSizePercent          := 0.5,     ; 0.0-1.0 float
            scrollSmoothness                 := 0.35,    ; higher values make it feel snappier and less smooth
            scrollPixelOffset                := 40,
-           defaultPanelSizePercent          := 0.5,     ; 0.0-1.0 float
 
-           wrapRowSelection                 := true,
-           alwaysHighlightFirst             := true,    ; applies to filtering windows when typing
+           monitor                          := MonitorGetPrimary(),     ; any valid number that represents a monitor you have (can use MonitorGetCount() to find out the the max)
+           wrapRowSelection                 := true,    ; whether keyboard navigation wraps back to the beginning/end of the list
+           alwaysHighlightFirstRow          := true,    ; applies to filtering windows when typing
            showAllCloseButtons              := false,
-           escapeAlwaysClose                := true,    ; alternatively, you could also just use a hotkey to do the same thing
+           escapeAlwaysClose                := false,   ; alternatively, you could also just use a hotkey to do the same thing
            showPanelOnOpen                  := true,
            fullLengthDividers               := false,
            fullLengthPartition              := true,
@@ -160,8 +166,6 @@ class TaskSwitcher {
         OnMessage(0x2A3, this._OnMouseLeave, 0)
         OnMessage(0x201, this._OnLeftClick, 0)
         OnMessage(0x202, this._OnLeftClickRelease, 0)
-        OnMessage(0x203, this._OnRightClick, 0)
-        OnMessage(0x204, this._OnRightClickRelease, 0)
         OnMessage(0x207, this._OnMiddleClick, 0)
         OnMessage(0x208, this._OnMiddleClickRelease, 0)
 
@@ -384,14 +388,15 @@ class TaskSwitcher {
             ; colors that depend on others when using 'Auto' must come after the dependent color in the arrays
             textColors := ['searchTextColor', 'placeholderTextColor',
                            'rowSelectedTextColor', 'mouseRowHoverTextColor', 'rowTextColor',
-                           'panelHeaderTextColor', 'panelBodyTextColor', 'mouseRowSelectedTextColor']
+                           'panelHeaderTextColor', 'panelBodyTextColor', 'mouseRowSelectedTextColor', 'panelTabTextColor']
 
-            colors := ['rowBackgroundColor', 'topbarColor', 'rowTextColor', 'rowSelectedColor', 'mouseRowHoverBackgroundColor', 'panelBackgroundColor',
+            colors := ['mainColor', 'topbarColor', 'rowTextColor', 'rowSelectedColor', 'mouseRowHoverBackgroundColor', 'panelBackgroundColor',
                        'mouseRowHoverTextColor', 'mouseRowSelectedBackgroundColor', 'mouseRowSelectedTextColor', 'partitionColor', 'rowDividerColor',
                        'rowSelectedTextColor', 'searchBackgroundColor', 'closeBackgroundColor', 'closeHoverBackgroundColor',
                        'closeXColor', 'closeXHoverColor', 'panelIconBackgroundColor',
+                       'panelTabInactiveColor', 'panelTabHoverColor', 'panelTabSelectedColor', 'panelTabActiveColor',
                        'panelIconLinesColor', 'placeholderTextColor', 'searchTextColor',
-                       'panelHeaderTextColor', 'panelBodyTextColor']
+                       'panelHeaderTextColor', 'panelBodyTextColor', 'panelTabTextColor']
 
             EnsureColorHasAlphaAndDefaultValue()
             EnsureTextColorsAreFormatted()
@@ -415,36 +420,44 @@ class TaskSwitcher {
 
                     if color = 'Auto' {
                         switch property {
-                        case 'rowBackgroundColor':
+                        case 'mainColor':
                             value := this.__GetUserThemeColor()
-                            this.rowBackgroundColor := value ? 0xFFFFFFFF : 0xFF1E1E1E
+                            this.mainColor := value ? 0xFFFFFFFF : 0xFF1E1E1E
                         case 'topbarColor':
-                            this.topbarColor := this.rowBackgroundColor
+                            this.topbarColor := this.mainColor
                         case 'panelBackgroundColor':
-                            this.panelBackgroundColor := this.rowBackgroundColor
+                            this.panelBackgroundColor := this.mainColor
                         case 'closeBackgroundColor':
-                            SetAutoAdjustedColor(property, this.rowBackgroundColor)
+                            SetAutoAdjustedColor(property, this.mainColor)
                         case 'rowDividerColor':
-                            SetAutoAdjustedColor(property, this.rowBackgroundColor, 80)
+                            SetAutoAdjustedColor(property, this.mainColor, 80)
                         case 'searchBackgroundColor', 'panelIconBackgroundColor':
                             SetAutoAdjustedColor(property, this.topbarColor)
                         case 'placeholderTextColor':
                             SetAutoAdjustedColor(property, this.searchBackgroundColor, 80)
                         case 'closeHoverBackgroundColor':
-                            SetAutoAdjustedColor(property, this.rowBackgroundColor)
+                            SetAutoAdjustedColor(property, this.mainColor)
                         case 'closeXHoverColor':
                             SetAutoAdjustedColor(property, this.closeHoverBackgroundColor)
                         case 'partitionColor':
                             SetAutoAdjustedColor(property, this.panelBackgroundColor)
+                        case 'panelTabActiveColor':
+                            SetAutoAdjustedColor(property, this.panelTabSelectedColor)
+                        case 'panelTabInactiveColor':
+                            SetAutoAdjustedColor(property, this.panelBackgroundColor)
+                        case 'panelTabHoverColor':
+                            SetAutoAdjustedColor(property, this.panelTabInactiveColor)
+                        case 'panelTabSelectedColor':
+                            SetAutoAdjustedColor(property, this.panelTabHoverColor, 20)
 
                         case 'rowSelectedColor':
-                            SetAutoAdjustedColorOfPossibleArray(property, this.rowBackgroundColor)
+                            SetAutoAdjustedColorOfPossibleArray(property, this.mainColor)
                         case 'mouseRowHoverBackgroundColor':
                             SetAutoAdjustedColorOfPossibleArray(property, this.rowSelectedColor, 80)
                         case 'mouseRowSelectedBackgroundColor':
                             SetAutoAdjustedColorOfPossibleArray(property, this.mouseRowHoverBackgroundColor)
 
-                        case 'mouseRowHoverTextColor':
+                         case 'mouseRowHoverTextColor':
                             SetContrastingColorFromPossibleArray(property, this.mouseRowHoverBackgroundColor)
                         case 'rowSelectedTextColor':
                             SetContrastingColorFromPossibleArray(property, this.rowSelectedColor)
@@ -456,11 +469,13 @@ class TaskSwitcher {
                         case 'placeholderTextColor', 'searchTextColor':
                             SetContrastingColor(property, this.searchBackgroundColor)
                         case 'rowTextColor':
-                            SetContrastingColor(property, this.rowBackgroundColor)
+                            SetContrastingColor(property, this.mainColor)
                         case 'panelHeaderTextColor', 'panelBodyTextColor':
                             SetContrastingColor(property, this.panelBackgroundColor)
                         case 'mouseRowSelectedTextColor':
                             SetContrastingColor(property, this.mouseRowSelectedBackgroundColor)
+                        case 'panelTabTextColor':
+                            SetContrastingColor(property, this.panelTabInactiveColor)
                         default:
                             throw Error('Auto option is not supported for this property: ' property)
                         }
@@ -615,8 +630,6 @@ class TaskSwitcher {
         OnMessage(0x2A3, this._OnMouseLeave)
         OnMessage(0x201, this._OnLeftClick)
         OnMessage(0x202, this._OnLeftClickRelease)
-        OnMessage(0x203, this._OnRightClick)
-        OnMessage(0x204, this._OnRightClickRelease)
         OnMessage(0x207, this._OnMiddleClick)
         OnMessage(0x208, this._OnMiddleClickRelease)
 
@@ -691,20 +704,12 @@ class TaskSwitcher {
      * @param {String/Func} Updates 'All' or a function that calls the appropriate update methods
      */
     static __DrawMenu(Updates := 'All') {
-        static lastDrawTime := 0
         if this._isDrawing {
             return
         }
 
-        ; now := A_TickCount
-        ; if now - lastDrawTime < 16 {
-        ;     return
-        ; }
-        ; lastDrawTime := now
-
         Critical(10)
         this._isDrawing := true
-        this._ih.Stop()
         if Updates = 'All' {
             this.__UpdateSearchBar()
             this.__UpdatePanelIcon()
@@ -716,7 +721,6 @@ class TaskSwitcher {
 
         this.__UpdateWindow()
         this._isDrawing := false
-        this._ih.Start()
         Critical('Off')
     }
 
@@ -799,7 +803,7 @@ class TaskSwitcher {
         Gdip_SetInterpolationMode(WindowList, 7)
 
         ; background
-        pBrush := Gdip_BrushCreateSolid(this.rowBackgroundColor)
+        pBrush := Gdip_BrushCreateSolid(this.mainColor)
         Gdip_FillRectangle(WindowList, pBrush, 0, 0, width, height)
         Gdip_DeleteBrush(pBrush)
 
@@ -1080,7 +1084,7 @@ class TaskSwitcher {
         this.__DrawPanelTabs(Panel)
 
         ; draw tab content
-        tabHeight := 40
+        tabHeight := this._tabBarHeight
         useMousedRow := this.mouseRowHoverUpdatesPanel && this._lastUsedDevice = 'mouse' && this._hoveredOver
         row := useMousedRow ? this._hoveredOver : this._selectedRow
 
@@ -1100,7 +1104,7 @@ class TaskSwitcher {
         this._panelTabRects := []
 
         width := this.menuWidth - this._partitionX
-        tabHeight := 40
+        tabHeight := this._tabBarHeight
 
         spacing := this.marginX
         partitionSize := this.partitionWidth
@@ -1117,13 +1121,13 @@ class TaskSwitcher {
             offset := index = 1 ? halfParitionSize : 0
             x := offset + spacing + ((index - 1) * (tabWidth + spacing))
 
-            colorAdjustment := GetColorAdjustmentValue(index, tabName)
-            bgColor := this.__ColorBrightnessAutoAdjust(this.panelBackgroundColor, colorAdjustment)
+            bgColor := GetColorAdjustmentValue(index, tabName)
             pBrush := Gdip_BrushCreateSolid(bgColor)
+
             Gdip_FillRoundedRectangle(Panel, pBrush, x, y, tabWidth, tabHeight - this.marginY, 6)
             Gdip_DeleteBrush(pBrush)
 
-            textColor := this.rowTextColor
+            textColor := this.panelTabTextColor
             options := 'x' x ' y' (y + 6) ' s14 Bold c' textColor ' Center'
             Gdip_TextToGraphics(Panel, tabName, options, 'Arial', tabWidth, tabHeight - (y * 2))
 
@@ -1140,13 +1144,13 @@ class TaskSwitcher {
 
         GetColorAdjustmentValue(index, tabName) {
             if this._clicked.item = tabName {                                       ; tab is clicked
-                return 120
+                return this.panelTabSelectedColor
             } else if this._hoveredPanelTab = (index = 1 ? 'preview' : 'info') {    ; tab is hovered
-                return 100
+                return this.panelTabHoverColor
             } else if this._panelTab = (index = 1 ? 'preview' : 'info') {           ; tab is active
-                return 80
+                return this.panelTabActiveColor
             } else {
-                return 60
+                return this.panelTabInactiveColor
             }
         }
     }
@@ -1292,7 +1296,10 @@ class TaskSwitcher {
             }
         }
 
-        WinGetPos(,, &winW, &winH, 'ahk_id ' window.hwnd)   ; get window dimensions for preview
+        try WinGetPos(,, &winW, &winH, 'ahk_id ' window.hwnd)   ; get window dimensions for preview
+        catch {
+            return
+        }
 
         margin := this.marginX
         maxWidth := panelWidth - (margin * 2)
@@ -1519,7 +1526,7 @@ class TaskSwitcher {
 
         this._lastWindowCount := totalRows
 
-        if this.alwaysHighlightFirst && !overrideSelectedRow {
+        if this.alwaysHighlightFirstRow && !overrideSelectedRow {
             this._selectedRow := 1
         } else {
             totalRows := this.Menu.windows.Length
@@ -1960,14 +1967,6 @@ class TaskSwitcher {
         }
     }
 
-    static __OnRightClick(wParam, lParam, msg, hwnd) {
-
-    }
-
-    static __OnRightClickRelease(wParam, lParam, msg, hwnd) {
-
-    }
-
     static __OnMiddleClick(wParam, lParam, msg, hwnd) {
         if this._hoveredOver {
            this._clicked.item := 'row'
@@ -2170,6 +2169,13 @@ class TaskSwitcher {
         case 'Down':
             this._lastUsedDevice := 'keyboard'
             this.SelectNextWindow()
+            return
+
+        case 'Left', 'Right':
+            previewSelected := this._panelTab = 'Preview'
+            this._panelTab := previewSelected ? 'Info' : 'Preview'
+            this.__CleanupThumbnail()
+            this.__DrawMenu(() => this.__UpdatePanel())
             return
 
         case 'Space':
@@ -2620,8 +2626,6 @@ class TaskSwitcher {
         this._OnMouseLeave          := ObjBindMethod(this, '__OnMouseLeave')
         this._OnLeftClick           := ObjBindMethod(this, '__OnLeftClick')
         this._OnLeftClickRelease    := ObjBindMethod(this, '__OnLeftClickRelease')
-        this._OnRightClick          := ObjBindMethod(this, '__OnRightClick')
-        this._OnRightClickRelease   := ObjBindMethod(this, '__OnRightClickRelease')
         this._OnMiddleClick         := ObjBindMethod(this, '__OnMiddleClick')
         this._OnMiddleClickRelease  := ObjBindMethod(this, '__OnMiddleClickRelease')
 
@@ -2641,6 +2645,7 @@ class TaskSwitcher {
         this._menuHeight := 0
         this._lastWindowListWidth := 0
         this._searchBarHeight := 34
+        this._tabBarHeight := 40
 
         this._scrollOffset := 0
         this._targetScrollOffset := 0

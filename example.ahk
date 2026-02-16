@@ -1,4 +1,4 @@
-﻿#Include task switcher.ahk
+﻿#Include task-switcher.ahk
 Suspend(true)
 
 
@@ -15,7 +15,7 @@ Suspend(true)
 ; @example of changing options without modifying the class directly
 ; see @options near beginning of TaskSwitcher class for all options you can modify
 TaskSwitcher({
-    rowBackgroundColor: 0xDD111111,
+    mainColor: 0xDD111111,
     panelBackgroundColor: 0xDD111111,
     topbarColor: 0xDD111111,
     alwaysHighlightFirst: true,

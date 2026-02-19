@@ -113,6 +113,8 @@ TaskSwitcher.CloseMenu()                ; Close the switcher
 TaskSwitcher.OnWindowActivate(Callback) ; Run user code when window is activated
 TaskSwitcher.OnMenuOpen(Callback)       ; Run user code when menu opens
 TaskSwitcher.OverrideWindowNames(exe, name, exe2, name2, ...) ; Custom names for windows
+TaskSwitcher.DisableAltEscape()         ; Disable Alt+Escape cycling through windows
+TaskSwitcher.DisableCtrlAltTab()        ; Disable vanilla alt-tab toggle behavior
 ```
 
 ### Niche:

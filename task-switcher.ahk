@@ -325,7 +325,7 @@ class TaskSwitcher {
         Hotkey('!Escape', (*) => 0)
     }
 
-    static CtrlAltTab() {
+    static DisableCtrlAltTab() {
         Hotkey('!^Tab', (*) => 0)
     }
 
@@ -1531,7 +1531,7 @@ class TaskSwitcher {
         } else {
             totalRows := this.Menu.windows.Length
             if this._selectedRow > totalRows {
-                this._selectedRow := totalRows
+                this._selectedRow := Max(1, totalRows)  ; ensure selected row is never 0 or scrollOffset will offset itself when list becomes empty during filtering
             }
         }
 

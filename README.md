@@ -57,20 +57,20 @@ You can type to search through the open programs and get to what you need even f
 | **Window Info Panel** | View metadata about the window: HWND, PID, dimensions, transparency, always-on-top status, etc. |
 | **Close Windows** | Close a window directly from the switcher (middle-click on a row, click the X button, or press `Delete`). |
 | **Keyboard Navigation** | `Up/Down` arrow keys to move between windows, Enter to select, Escape to close. |
-| **Row Numbers** | Press 1-9 or 0 to quickly select a window by number. |
+| **Row Numbers** | Press `1-9` or `0` to quickly select a window by number. |
 | **Sorted Windows** | Option to show windows alphabetically instead of by recent use (default). |
 | **Multi-monitor Support** | Open the switcher on a specific monitor. |
 | **Mouse Support** | Click or scroll to navigate. Hovering over a window shows it in the preview. |
 | **List/Panel Resizing** | Drag the partition between the list and panel to resize. |
 | **Icon Caching** | Icons are cached for faster performance on repeated opens. |
-| **Auto Colors** | Colors can be set to "Auto" to automatically adjust based on background. |
+| **Auto Colors** | Colors can be set to `Auto` to automatically adjust based on background. |
 
 ## How to Use
 
 First make sure to alter the dependency path (or remove, if you `#Include` the dependency path in another file) to the GDI+ dependency library `Gdip_All.ahk` so it points to the correct destination:
 
 ```AutoHotkey
-| Inside task switcher.ahk script
+| Inside task-switcher.ahk script
 
 #Include ..\..\lib\Gdip_All.ahk     ; change this path
 ```
@@ -80,7 +80,7 @@ Then call it from a hotkey:
 ```AutoHotkey
 #Requires AutoHotkey v2.0
 #SingleInstance
-#Include path\to\TaskSwitcher.ahk
+#Include path\to\task-switcher.ahk
 
 $>^LCtrl::TaskSwitcher.ToggleMenu()
 $<^RCtrl::TaskSwitcher.ToggleMenu()
@@ -197,6 +197,7 @@ TaskSwitcher({
 | `mouseRowHoverUpdatesPanel` | Boolean | true | Preview updates when hovering with mouse |
 | `fullLengthDividers` | Boolean | false | Divider lines span full width or just the content |
 | `fullLengthPartition` | Boolean | true | Partition line spans full height or just content |
+| `allowPanelDuringFiltering` | Boolean | false | When false, panel is hidden while typing (filtering windows) |
 
 </details>
 
@@ -260,5 +261,3 @@ rowSelectedColor: [0xFF1E1E1E, 0xFF3D3D3D]
 
 
 ## Bugs
-
-- When under heavy load (such as playing a game), there's a chance that closing the menu doesn't stop the InputHook. This causes stuff you typed to show up in the search bar when you re-open the menu. Minor issue. Use Ctrl+Backspace or re-open the menu to clear the search bar.

@@ -97,6 +97,7 @@ class TaskSwitcher {
            clickPassthrough                 := false,
            rowNumbers                       := true,
            mouseRowHoverUpdatesPanel        := true,
+           allowPanelDuringFiltering        := false,
 
 
         /**
@@ -118,7 +119,7 @@ class TaskSwitcher {
     static hasMouseOver => (MouseGetPos(,, &win), win = TaskSwitcher.Menu.Hwnd)
 
     static ToggleMenuSorted(options := {}) {
-        if this.open {
+        if this.isOpen {
             this.CloseMenu()
             return
         }
@@ -127,7 +128,7 @@ class TaskSwitcher {
     }
 
     static ToggleMenu(options := {}) {
-        if this.open {
+        if this.isOpen {
             this.CloseMenu()
             return
         }
@@ -136,7 +137,7 @@ class TaskSwitcher {
     }
 
     static OpenMenuSorted(options := {}) {
-        if this.open {
+        if this.isOpen {
             return
         }
 
@@ -144,7 +145,7 @@ class TaskSwitcher {
     }
 
     static OpenMenu(options := {}) {
-        if this.open {
+        if this.isOpen {
             return
         }
 
@@ -152,13 +153,14 @@ class TaskSwitcher {
     }
 
     static CloseMenu() {
-        if !this.open {
+        if !this.isOpen {
             return
         }
 
-        Critical(10)    ; attempt to prevent scenarios where computer is under heavy load (like a game running) and inputhook isn't stopped for some reason. needs testing
+        Critical(50)
 
         DllCall('ReleaseCapture')
+
         this._ih.Stop()
         this.Menu.Hide()
         OnMessage(0x200, this._OnMouseMove, 0)
@@ -171,6 +173,7 @@ class TaskSwitcher {
 
         this._lastUsedDevice := 'keyboard'
         this._lastPreviewHwnd := 0
+        this._lastPressedKey := ''
         this._windowRects := []
         this._hoveredOver := 0
         this._hoveredCloseButton := 0
@@ -183,7 +186,6 @@ class TaskSwitcher {
 
         this._scrollOffset := 0
         this._targetScrollOffset := 0
-        this.open := false
         Critical('Off')
     }
 
@@ -287,10 +289,8 @@ class TaskSwitcher {
 
         HotIf((*) => !TaskSwitcher.isOpen)
         Hotkey('!Tab', (*) {
-            Critical(10)
             altTabHotkeysEnabled := true
             TaskSwitcher.OpenMenu({index: 2})
-            Critical('Off')
         }, state)
 
         HotIf((*) => altTabHotkeysEnabled && TaskSwitcher.isActive)
@@ -309,7 +309,7 @@ class TaskSwitcher {
                 TaskSwitcher.ActivateWindowAndCloseMenu()
             } else if TaskSwitcher.isOpen {
                 TaskSwitcher.CloseMenu()
-            } else if this.open && WinWaitActive(this.Menu.Hwnd,, 2) {   ; in the process of opening
+            } else if this.isOpen && WinWaitActive(this.Menu.Hwnd,, 2) {   ; in the process of opening
                 if altTabHotkeysEnabled {
                     this.CloseMenu()
                 }
@@ -322,7 +322,7 @@ class TaskSwitcher {
     }
 
     static DisableAltEscape() {
-        Hotkey('!Escape', (*) => 0)
+        Hotkey('*!Escape', (*) => 0)
     }
 
     static DisableCtrlAltTab() {
@@ -361,12 +361,12 @@ class TaskSwitcher {
         }
 
         if this.rowNumbers {
-            HotIf((key) => TaskSwitcher.isOpen && this.Menu.windows.Has(key))
+            HotIf((key) => TaskSwitcher.isOpen && this.Menu.windows.Has(SubStr(key, -1)) && !GetKeyState('Shift'))
             loop 9 {
-                Hotkey(A_Index, (key) => this.ActivateWindowAndCloseMenu(key))
+                Hotkey('*' A_Index, (key) => this.ActivateWindowAndCloseMenu(SubStr(key, -1)))
             }
-            HotIf((key) => TaskSwitcher.isOpen && this.Menu.windows.Has(10))
-            Hotkey('0', (key) => this.ActivateWindowAndCloseMenu(10))
+            HotIf((key) => TaskSwitcher.isOpen && this.Menu.windows.Has(10)) && !GetKeyState('Shift')
+            Hotkey('*0', (key) => this.ActivateWindowAndCloseMenu(10))
             HotIf()
         }
 
@@ -518,6 +518,12 @@ class TaskSwitcher {
         }
 
         VariousPropertiesSetup() {
+            if this.allowPanelDuringFiltering {
+                this.DefineProp('_searchText', {
+                    Get: (self) => this._private_searchText,
+                    Set: (self, value) => this._private_searchText := value
+                })
+            }
             this._topBarHeight := this._searchBarHeight + (this.marginY * 2)
             this._showInfoPanel := this.showPanelOnOpen
             this._searchText := this._placeholderSearchText
@@ -603,7 +609,8 @@ class TaskSwitcher {
     static __FirstDraw() {
         static _ := () {
             this.HasOwnProp('Call') && this()
-        }()
+            return unset
+        }() ?? unset
 
         this.__UpdateTotalHeight()      ; necessary for certain this._selectedRow starting values when this.__ScrollToSelectedRow() is called
         this.__KeepSelectedRowVisible()
@@ -623,7 +630,7 @@ class TaskSwitcher {
     }
 
     static __OpenMenu(options, sortedWindows := false) {
-        this.open := true
+        Critical(50)
         this._sortedWindows := sortedWindows
         OnMessage(0x200, this._OnMouseMove)
         OnMessage(0x20A, this._OnMouseWheel)
@@ -639,9 +646,11 @@ class TaskSwitcher {
         this._selectedRow := Min(Max(1, startingIndex), this.Menu.windows.Length)
 
         this.__FirstDraw()
+        ; Critical(50)
         this.Menu.Show('w' this.menuWidth ' h' this._menuHeight)
         this._ih.Start()
         this._onMenuOpen(this.Menu)
+        Critical('Off')
     }
 
     static __CloseWindow(selectedRow := this._selectedRow) {
@@ -708,7 +717,7 @@ class TaskSwitcher {
             return
         }
 
-        Critical(10)
+        ; Critical(10)
         this._isDrawing := true
         if Updates = 'All' {
             this.__UpdateSearchBar()
@@ -721,7 +730,7 @@ class TaskSwitcher {
 
         this.__UpdateWindow()
         this._isDrawing := false
-        Critical('Off')
+        ; Critical('Off')
     }
 
     static __DrawTopBar(width, height) {
@@ -1088,6 +1097,26 @@ class TaskSwitcher {
         useMousedRow := this.mouseRowHoverUpdatesPanel && this._lastUsedDevice = 'mouse' && this._hoveredOver
         row := useMousedRow ? this._hoveredOver : this._selectedRow
 
+        if this.Menu.windows.Length = 0 {
+            Panel := this._sections['Panel'].graphics
+            if this._panelTab = 'preview'  {
+                availableWidth := width - (this.marginX * 2)
+                availableHeight := height - (this.marginY * 2)
+
+                x := this.marginX
+                y := tabHeight + this.marginY + (availableHeight / 2) - 8
+
+                options := 'x' x ' y' y ' s24 cFFC0C0C0 Center Bold'
+                Gdip_TextToGraphics(Panel, 'No matches', options, 'Arial', availableWidth, availableHeight)
+                this.__CleanupThumbnail()
+            } else {
+                x := this.marginX
+                y := tabHeight + this.marginY
+                Gdip_TextToGraphics(Panel, "No information available", 'x' x ' y' y ' s16 cFFC0C0C0', 'Arial', width - (this.marginX * 2), 30)
+            }
+            return
+        }
+
         if row > 0 && row <= this.Menu.windows.Length {
             window := this.Menu.windows[row]
 
@@ -1211,7 +1240,7 @@ class TaskSwitcher {
 
         oldHoveredTab := this._hoveredPanelTab
 
-        if this._showInfoPanel && x >= this._partitionX {
+        if this._showInfoPanel && x >= this._partitionX && y >= this._topBarHeight {
             panelRelativeX := x - this._partitionX
             panelRelativeY := y - this._topBarHeight
 
@@ -1227,8 +1256,8 @@ class TaskSwitcher {
 
         if !IsSet(hoveredTab) {
             this._hoveredPanelTab := ''
-            this.__DrawMenu(() => this.__UpdatePanel())
-        } else if oldHoveredTab != this._hoveredPanelTab {
+        }
+        if oldHoveredTab != this._hoveredPanelTab {
             this.__DrawMenu(() => this.__UpdatePanel())
         }
 
@@ -2097,14 +2126,24 @@ class TaskSwitcher {
     }
 
     static __OnKeyPress(ih, vk, sc) {
+        static NonRepeatableKeys := Map(
+            'Escape',   true,
+            'Enter',    true,
+            'Home',     true,
+            'End',      true,
+            'Left',     true,
+            'Right',    true,
+            'Delete',   true,
+            'Tab',      true,
+        )
+
         key := GetKeyName(Format('vk{:x}sc{:x}', vk, sc))
 
-        if !this.open {
-            ToolTip('key: ' key)
-            SetTimer(ToolTip, -1000)
-            this._ih.Stop()
+        if key = this._lastPressedKey && NonRepeatableKeys.Has(this._lastPressedKey) {
             return
         }
+
+        this._lastPressedKey := key
 
         switch key {
         case 'Escape':
@@ -2632,8 +2671,12 @@ class TaskSwitcher {
         this._ih := InputHook('L0 V')
         this._ih.KeyOpt('{All}', 'N')
         this._ih.OnKeyDown := ObjBindMethod(this, '__OnKeyPress')
-
-        this.open := false
+        this._ih.OnKeyUp := (ih, vk, sc) {
+            key := GetKeyName(Format('vk{:x}sc{:x}', vk, sc))
+            if key = this._lastPressedKey {
+                this._lastPressedKey := ''
+            }
+        }
 
         this._sections := Map()
         this._iconCache := Map()
@@ -2658,6 +2701,7 @@ class TaskSwitcher {
         this._isDrawing := false
         this._canScroll := false
         this._scrollTimerActive := false
+        this._lastPressedKey := ''
         this._showInfoPanel := false
         this._closeButtonRects := []
         this._panelTabRects := []

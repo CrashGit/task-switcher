@@ -1,5 +1,5 @@
 # Task Switcher
-Options are not compatible with previous version.
+> Options are not compatible with previous version.
 
 Jump to:
 - [Description](#description)
@@ -10,7 +10,8 @@ Jump to:
 - [Keyboard Shortcuts](#keyboard-shortcuts)
 - [Customization](#customization)
 - [Additional Information](#additional-information)
-- [Bugs](#bugs)
+- [Known Issues](#known-issues)
+
 
 ___
 
@@ -22,9 +23,9 @@ ___
 
 
 ### Description:
-A replacement for Windows Alt+Tab with a visual window switcher. Instead of cycling through a small preview, this displays all open windows in a larger interface where you can search, preview, and select the window you want.
+A replacement for Windows Alt+Tab with a visual window switcher. Instead of cycling through a small window preview, this displays all open windows in a list where you can search, preview, and select the window you want.
 
-The script is meant to be a faster means of activating open programs. It gives you a list of all open windows instead of some ever-changing preview with too many images to quickly discern what you want. If there are more programs open than the maxRowVisible property, the window becomes scrollable. You can navigate and activate a window using keyboard keys or the mouse.
+The script is meant to be a faster means of activating open programs. It gives you a list of all open windows instead of some ever-changing preview with too many images to quickly discern what you want. If there are more programs open than the `maxRowVisible` property, the window becomes scrollable. You can navigate and activate a window using keyboard keys or the mouse.
 
 You can type to search through the open programs and get to what you need even faster. Search/filter windows by title or name.
 > **Note:** The name criteria varies: First it looks for a custom name if one is passed to `OverrideWindowNames()`. If the user hasn't passed one, then it checks for a product name. Finally, if one isn't found, it uses the exe name.
@@ -62,7 +63,6 @@ You can type to search through the open programs and get to what you need even f
 | **Multi-monitor Support** | Open the switcher on a specific monitor. |
 | **Mouse Support** | Click or scroll to navigate. Hovering over a window shows it in the preview. |
 | **List/Panel Resizing** | Drag the partition between the list and panel to resize. |
-| **Icon Caching** | Icons are cached for faster performance on repeated opens. |
 | **Auto Colors** | Colors can be set to `Auto` to automatically adjust based on background. |
 
 ## How to Use
@@ -92,11 +92,11 @@ Or use the built-in Alt+Tab replacement:
 TaskSwitcher.AltTabReplacement('On')
 ```
 
-This makes Alt+Tab open the switcher as long as Alt remains press down. While the switcher is open, Alt+Tab cycles through windows.
+This makes Alt+Tab open the switcher as long as Alt remains pressed down. While the switcher is open, Alt+Tab cycles through windows.
 
 > **Note:** Hotkeys pressed while the menu is open (especially relevant to the Niche methods and `CloseMenu()`), require the keyboard hook to work.
 
-*\*See the `example.ahk` file for more examples of various things.*
+*\*See the `example.ahk` file for more hotkey examples and setup examples.*
 
 
 ## Methods
@@ -112,9 +112,10 @@ TaskSwitcher.CloseMenu()                ; Close the switcher
 ```AutoHotkey
 TaskSwitcher.OnWindowActivate(Callback) ; Run user code when window is activated
 TaskSwitcher.OnMenuOpen(Callback)       ; Run user code when menu opens
-TaskSwitcher.OverrideWindowNames(exe, name, exe2, name2, ...) ; Custom names for windows
 TaskSwitcher.DisableAltEscape()         ; Disable Alt+Escape cycling through windows
 TaskSwitcher.DisableCtrlAltTab()        ; Disable vanilla alt-tab toggle behavior
+TaskSwitcher.AltTabReplacement()        ; Enable/Disable alt-tab hotkeys for the TaskSwitcher (values: 'On', 'Off', 'Toggle')
+TaskSwitcher.OverrideWindowNames(exe, name, exe2, name2, ...) ; Custom names for windows
 ```
 
 ### Niche:
@@ -257,7 +258,6 @@ rowSelectedColor: [0xFF1E1E1E, 0xFF3D3D3D]
 - Use `OverrideWindowNames()` if a window name is incorrect or missing. For the life of me, I could not properly retrieve the name for Steam so this is what I use to display Steam instead of steamwebhelper.
 - The info panel shows a live preview unless the window is minimized (preview not available for minimized windows).
 - The switcher respects virtual desktops on Windows 10+.
+
+## Known Issues
 - When using recent sorting order, always-on-top windows always show up first. No way around this without potentially complex window tracking.
-
-
-## Bugs

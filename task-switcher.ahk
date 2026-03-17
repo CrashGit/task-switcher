@@ -94,7 +94,7 @@ class TaskSwitcher {
            fullLengthPartition              := true,
            preventResize                    := true,
            closeOnOutsideClick              := true,    ; closes the menu if you click with any mouse button outside the menu
-           clickPassthrough                 := false,
+           clickPassthrough                 := true,
            rowNumbers                       := true,
            mouseRowHoverUpdatesPanel        := true,
            allowPanelDuringFiltering        := false,
@@ -114,7 +114,7 @@ class TaskSwitcher {
     ; @END_OF_OPTIONS --------------------------------
 
 
-    static isOpen => WinExist('ahk_id' this.Menu.Hwnd)
+    static isOpen => (DetectHiddenWindows(false), WinExist('ahk_id' this.Menu.Hwnd))
     static isActive => WinActive('ahk_id' this.Menu.Hwnd)
     static hasMouseOver => (MouseGetPos(,, &win), win = TaskSwitcher.Menu.Hwnd)
 
@@ -212,11 +212,17 @@ class TaskSwitcher {
             return  ; returns if no changes were made
         }
 
-        this.__KeepSelectedRowVisible()
-        this.__DrawMenu(() {
-            this.__UpdateWindowList()
-            this.__UpdatePanel()
-        })
+        /**
+         * I have hotkeys that send {Up} and {Down} multiple times to make navigation easier.
+         * This code is an attempt to minimize issues that came with quickly-repeated navigation events.
+         */
+        SetTimer(() {
+            this.__KeepSelectedRowVisible()
+            this.__DrawMenu(() {
+                this.__UpdateWindowList()
+                this.__UpdatePanel()
+            })
+        }, -30)
     }
 
     static SelectNextWindow() {
@@ -228,11 +234,17 @@ class TaskSwitcher {
             return  ; returns if no changes were made
         }
 
-        this.__KeepSelectedRowVisible()
-        this.__DrawMenu(() {
-            this.__UpdateWindowList()
-            this.__UpdatePanel()
-        })
+        /**
+         * I have hotkeys that send {Up} and {Down} multiple times to make navigation easier.
+         * This code is an attempt to minimize issues that came with quickly-repeated navigation events.
+         */
+        SetTimer(() {
+            this.__KeepSelectedRowVisible()
+            this.__DrawMenu(() {
+                this.__UpdateWindowList()
+                this.__UpdatePanel()
+            })
+        }, -30)
     }
 
     static SelectFirstRow() {
@@ -293,7 +305,7 @@ class TaskSwitcher {
             TaskSwitcher.OpenMenu({index: 2})
         }, state)
 
-        HotIf((*) => altTabHotkeysEnabled && TaskSwitcher.isActive)
+        HotIf((*) => TaskSwitcher.isActive)
         Hotkey('!Tab', (*) => TaskSwitcher.SelectNextWindow(), state)
         Hotkey('+!Tab', (*) => TaskSwitcher.SelectPreviousWindow(), state)
         Hotkey('*!Escape', (*) {
@@ -524,6 +536,7 @@ class TaskSwitcher {
                     Set: (self, value) => this._private_searchText := value
                 })
             }
+
             this._topBarHeight := this._searchBarHeight + (this.marginY * 2)
             this._showInfoPanel := this.showPanelOnOpen
             this._searchText := this._placeholderSearchText

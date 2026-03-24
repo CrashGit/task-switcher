@@ -15,26 +15,30 @@ Suspend(true)
 ; @example of changing options without modifying the class directly
 ; see @options near beginning of TaskSwitcher class for all options you can modify
 TaskSwitcher({
-    mainColor: 0xDD111111,
-    panelBackgroundColor: 0xDD111111,
-    topbarColor: 0xDD111111,
+    colors: {
+        row: 0xDD111111,
+        panel: 0xDD111111,
+        topbar: 0xDD111111,
+        rowHighlight: 0xDDFFFFFF,
+        searchBar: 0xDD333333,
+        closeButton: 0x00000000,
+        closeButtonHoverHighlight: 0xFFFFFFFF,
+        closeButtonXHoverHighlight: 0xFFFF0000,
+        rowDivider: 0x88FFFFFF,
+    },
+
     alwaysHighlightFirst: true,
-    rowSelectedColor: 0xDDFFFFFF,
-    searchBackgroundColor: 0xDD333333,
-    escapeAlwaysClose: true,
+    escapePriority: true,
     closeButtonSize: 40,
-    closeBackgroundColor: 0x00000000,
-    closeHoverBackgroundColor: 0xFFFFFFFF,
-    closeXHoverColor: 0xFFFF0000,
     menuWidth: 1500,
     rowHeight: 60,
     iconSize: 50,
     maxVisibleRows: 15,
     partitionWidth: 3,
     rowDividerHeight: 2,
-    coordinates: 'Recenter',
-    rowDividerColor: 0x88FFFFFF,
     defaultPanelSizePercent: 0.6,
+    allowResize: true,
+    coordinates: 'Recenter',
 })
 
 ; move cursor to center of activated window
@@ -87,5 +91,5 @@ $F4::TaskSwitcher.AltTabReplacement('Toggle')
 
 
 #HotIf TaskSwitcher.isActive
-+=::TaskSwitcher.TogglePanel()
++=::TaskSwitcher.TogglePanelVisibility()
 #HotIf

@@ -22,89 +22,115 @@ TraySetIcon('shell32.dll', 90)
 ;============================================================================================
 ; @TaskSwitcher
 ;============================================================================================
-class TaskSwitcher {
-    ; @OPTIONS that can be changed here or used as a property name when passing options to TaskSwitcher({option: value})
-    ; Note - Options that go through Gdip_TextToGraphics require ARGB format as a string (e.g. 'FF00FF00' is an opaque green)
-    ;        while other color options use a 0xARGB (hex) number (e.g. 0xFF00FF00 is opaque green).
-    ;        I have made it so all explicit colors passed use 0xARGB. The appropriate options are converted to their naturally-accepted format.
+export class TaskSwitcher {
+    /**
+     * @DevNote
+     * Note - Options that go through Gdip_TextToGraphics require ARGB format as a string (e.g. 'FF00FF00' is an opaque green)
+     *        while other color options use a 0xARGB (hex) number (e.g. 0xFF00FF00 is opaque green).
+     *        I have made it so all explicit colors passed use 0xARGB. The appropriate options are converted to their naturally-accepted format.
+     */
 
     /**
-     * Most colors can be set to 'Auto' except mainColor and topbarColor
+     * @OPTIONS
+     * Colors can be set to 'Auto'
      *
-     * When set to auto, all colors use the background they're on to determine their color.
+     * When set to Auto, all colors use the background they're on to determine their color.
+     * The exception to this is colors.row as it is the dominant color and is decided on your Windows light/dark theme.
      * However, some colors like texts and the panel icon lines will be set to black or white to ensure high constrast.
      * The other colors will be set to a brighter/darker version of the color they're on to be thematic while offering some contrast.
      *
      * Some color options support an array of colors that will dictate a gradient.
      * If only two colors are supplied, the gradient is not a 50%-50% split. This is because if the second color starts blending too soon, it can affect visibility of the text.
      * No considerations are done if more than two colors are supplied, you must use your own judgement if the text visibility is good enough for you.
-     * Those options that support gradients are: rowSelectedColor, mouseRowSelectedBackgroundColor, and mouseRowHoverBackgroundColor
+     * Colors that support gradients are: colors.rowHighlight, colors.rowHoverHighlight, and colors.rowClickHighlight
      */
-    static mainColor                        := 'Auto',
-           rowTextColor                     := 'Auto',
-           rowSelectedColor                 := 'Auto',
-           rowSelectedTextColor             := 'Auto',
-           rowDividerColor                  := 'Auto',
-           mouseRowHoverTextColor           := 'Auto',
-           mouseRowHoverBackgroundColor     := 'Auto',
-           mouseRowSelectedBackgroundColor  := 'Auto',
-           mouseRowSelectedTextColor        := 'Auto',
+     static colors := {
+                ; keyboard selection
+                row                         : 'Auto',
+                rowHighlight                : 'Auto',
 
-           topbarColor                      := 'Auto',
-           placeholderTextColor             := 'Auto',
-           searchTextColor                  := 'Auto',
-           searchBackgroundColor            := 'Auto',
-           closeBackgroundColor             := 'Auto',
-           closeHoverBackgroundColor        := 'Auto',
-           closeXColor                      := 'Auto',
-           closeXHoverColor                 := 'Auto',
-           panelBackgroundColor             := 'Auto',
-           panelHeaderTextColor             := 'Auto',
-           panelBodyTextColor               := 'Auto',
-           panelIconBackgroundColor         := 'Auto',
-           panelIconLinesColor              := 'Auto',
-           partitionColor                   := 'Auto',
+                ; mouse selection
+                rowHoverHighlight           : 'Auto',
+                rowClickHighlight           : 'Auto',
 
-           panelTabActiveColor              := 'Auto',
-           panelTabInactiveColor            := 'Auto',
-           panelTabTextColor                := 'Auto',
-           panelTabHoverColor               := 'Auto',
-           panelTabSelectedColor            := 'Auto',
+                ; separation
+                rowDivider                  : 'Auto',
+                partition                   : 'Auto',
 
+                ; search
+                topBar                      : 'Auto',
+                searchBar                   : 'Auto',
+
+                ; close buttons
+                closeButton                 : 'Auto',
+                closeButtonHoverHighlight   : 'Auto',
+                closeButtonX                : 'Auto',
+                closeButtonXHoverHighlight  : 'Auto',
+
+                ; panel
+                panel                       : 'Auto',
+
+                ; panel icon
+                panelIcon                   : 'Auto',
+                panelIconLines              : 'Auto',
+
+                ; panel tabs
+                panelTabActive              : 'Auto',
+                panelTabInactive            : 'Auto',
+                panelTabHoverHighlight      : 'Auto',
+                panelTabClickHighlight      : 'Auto',
+           },
+
+           textColors := {
+                row                         : 'Auto',
+                rowHighlight                : 'Auto',
+                rowHoverHighlight           : 'Auto',
+                rowClickHighlight           : 'Auto',
+                placeholder                 : 'Auto',
+                searchBar                   : 'Auto',
+                panelHeader                 : 'Auto',
+                panelBody                   : 'Auto',
+                panelTab                    : 'Auto',
+           },
+
+           ; dimensions, positions, and spacing
            marginX                          := 12,
            marginY                          := 12,
            menuWidth                        := 1000,
            rowHeight                        := 75,
+           maxVisibleRows                   := 12,
            iconSize                         := 32,
            rowDividerHeight                 := 1,
            closeButtonSize                  := 24,
            partitionWidth                   := 2,
-           maxVisibleRows                   := 12,
-           defaultPanelSizePercent          := 0.5,     ; 0.0-1.0 float
-           scrollSmoothness                 := 0.35,    ; higher values make it feel snappier and less smooth
+           defaultPanelSizePercent          := 0.5,                 ; 0.0-1.0 float
            scrollPixelOffset                := 40,
+           monitorToDisplayOn               := MonitorGetPrimary(), ; any valid number that represents a monitor you have (can use MonitorGetCount() to find out the the max)
 
-           monitor                          := MonitorGetPrimary(),     ; any valid number that represents a monitor you have (can use MonitorGetCount() to find out the the max)
-           wrapRowSelection                 := true,    ; whether keyboard navigation wraps back to the beginning/end of the list
-           alwaysHighlightFirstRow          := true,    ; applies to filtering windows when typing
-           showAllCloseButtons              := false,
-           escapeAlwaysClose                := false,   ; alternatively, you could also just use a hotkey to do the same thing
-           showPanelOnOpen                  := true,
+
+           ; behavior
+           scrollSmoothingValue             := 0.35,                ; higher values make it feel snappier and less smooth
+           wrapRowNavigaion                 := true,                ; whether keyboard navigation wraps back to the beginning/end of the list
+           alwaysHighlightFirstRow          := true,                ; applies to filtering windows when typing
+           showCloseButtonsOnAllRows        := false,
+           escapePriority                   := false,
+           rememberPanelState               := false,
            fullLengthDividers               := false,
            fullLengthPartition              := true,
-           preventResize                    := true,
-           closeOnOutsideClick              := true,    ; closes the menu if you click with any mouse button outside the menu
+           allowResize                      := false,
+           closeOnOutsideClick              := true,                ; closes the menu if you click with any mouse button outside the menu
            clickPassthrough                 := true,
-           rowNumbers                       := true,
-           mouseRowHoverUpdatesPanel        := true,
-           allowPanelDuringFiltering        := false,
+           showRowNumbers                   := true,
+           allowMouseToUpdatePanel          := true,                ; whether mousing over a row will update the panel or if the panel should require keyboard navigation to update
+           showPanelDuringFiltering         := false,               ; true may result in a(n) funky/incomplete display if allowResize is true
+
 
 
         /**
           * @coordinates
           * 4 valid values: 'Center', 'Recenter', 'Mouse', {x: xPos, y: yPos}
           * Center - Centers the UI in the middle of your primary monitor.
-          * Recenter - Same as center except when you type to filter windows, the smaller list will continue to keep the UI centered.
+          * Recenter - Same as center except when you type to filter windows, the smaller list (when allowResize = true) will continue to keep the UI centered.
           * Mouse - UI spawns wherever the mouse is.
           * {x: xPos, y: yPos} - Custom coordinates object.
          */
@@ -114,42 +140,42 @@ class TaskSwitcher {
     ; @END_OF_OPTIONS --------------------------------
 
 
-    static isOpen => (DetectHiddenWindows(false), WinExist('ahk_id' this.Menu.Hwnd))
     static isActive => WinActive('ahk_id' this.Menu.Hwnd)
-    static hasMouseOver => (MouseGetPos(,, &win), win = TaskSwitcher.Menu.Hwnd)
+    static isOpen => (DetectHiddenWindows(false), WinExist('ahk_id' this.Menu.Hwnd))
+    static IsUnderMouse => (MouseGetPos(,, &win), win = TaskSwitcher.Menu.Hwnd)
 
-    static ToggleMenuSorted(options := {}) {
+    static ToggleMenuSorted(options?) {
         if this.isOpen {
             this.CloseMenu()
             return
         }
 
-        this.__OpenMenu(options, true)
+        this.__OpenMenu(options?, true)
     }
 
-    static ToggleMenu(options := {}) {
+    static ToggleMenu(options?) {
         if this.isOpen {
             this.CloseMenu()
             return
         }
 
-        this.__OpenMenu(options, false)
+        this.__OpenMenu(options?, false)
     }
 
-    static OpenMenuSorted(options := {}) {
+    static OpenMenuSorted(options?) {
         if this.isOpen {
             return
         }
 
-        this.__OpenMenu(options, true)
+        this.__OpenMenu(options?, true)
     }
 
-    static OpenMenu(options := {}) {
+    static OpenMenu(options?) {
         if this.isOpen {
             return
         }
 
-        this.__OpenMenu(options, false)
+        this.__OpenMenu(options?, false)
     }
 
     static CloseMenu() {
@@ -158,11 +184,11 @@ class TaskSwitcher {
         }
 
         Critical(50)
-
         DllCall('ReleaseCapture')
 
         this._ih.Stop()
         this.Menu.Hide()
+
         OnMessage(0x200, this._OnMouseMove, 0)
         OnMessage(0x20A, this._OnMouseWheel, 0)
         OnMessage(0x2A3, this._OnMouseLeave, 0)
@@ -182,103 +208,29 @@ class TaskSwitcher {
         this._userIsTyping := false
         this._tempDisablePanel := false                 ; needs to come before this._searchText reset
         this._searchText := this._placeholderSearchText
-        ; this._showInfoPanel := this.showPanelOnOpen   ; when uncommented, this resets the panel position to showPanelOnOpen value every time the panel is re-opened
-
         this._scrollOffset := 0
         this._targetScrollOffset := 0
+        if this.rememberPanelState {
+            this._showPanel := this.rememberPanelState
+        }
         Critical('Off')
+        ; this.__CleanupIcons()
     }
 
-    static ActivateWindowAndCloseMenu(selectedRow := this._selectedRow) {
+    static ActivateWindowAndCloseMenu(highlightedRow := this._highlightedRow) {
         this.CloseMenu()
-        this.ActivateWindow(selectedRow)
+        this.ActivateWindow(highlightedRow)
     }
 
-    static ActivateWindow(selectedRow := this._selectedRow) {
-        if this.Menu.windows.Has(selectedRow) {
-            window := this.Menu.windows[selectedRow]
-            if this.__ActivateWindow(window) {
-                this._onWindowActivate(window)
-            }
-        }
-    }
-
-    static SelectPreviousWindow() {
-        if this._selectedRow > 1 {
-            this._selectedRow -= 1
-        } else if this.wrapRowSelection {
-            this._selectedRow := this.Menu.windows.Length
-        } else {
-            return  ; returns if no changes were made
+    static ActivateWindow(highlightedRow := this._highlightedRow) {
+        if !this._windowList.Has(highlightedRow) {
+            return
         }
 
-        /**
-         * I have hotkeys that send {Up} and {Down} multiple times to make navigation easier.
-         * This code is an attempt to minimize issues that came with quickly-repeated navigation events.
-         */
-        SetTimer(() {
-            this.__KeepSelectedRowVisible()
-            this.__DrawMenu(() {
-                this.__UpdateWindowList()
-                this.__UpdatePanel()
-            })
-        }, -30)
-    }
-
-    static SelectNextWindow() {
-        if this._selectedRow < this.Menu.windows.Length {
-            this._selectedRow += 1
-        } else if this.wrapRowSelection {
-            this._selectedRow := 1
-        } else {
-            return  ; returns if no changes were made
+        window := this._windowList[highlightedRow]
+        if this.__ActivateWindow(window) {
+            this._onWindowActivate(window)
         }
-
-        /**
-         * I have hotkeys that send {Up} and {Down} multiple times to make navigation easier.
-         * This code is an attempt to minimize issues that came with quickly-repeated navigation events.
-         */
-        SetTimer(() {
-            this.__KeepSelectedRowVisible()
-            this.__DrawMenu(() {
-                this.__UpdateWindowList()
-                this.__UpdatePanel()
-            })
-        }, -30)
-    }
-
-    static SelectFirstRow() {
-        if this._selectedRow != 1 {
-            this._selectedRow := 1
-            this.__KeepSelectedRowVisible()
-            this.__DrawMenu(() {
-                this.__UpdateWindowList()
-            })
-        }
-    }
-
-    static SelectLastRow() {
-        last := this.Menu.windows.Length
-        if this._selectedRow != last {
-            this._selectedRow := last
-            this.__KeepSelectedRowVisible()
-            this.__DrawMenu(() {
-                this.__UpdateWindowList()
-            })
-        }
-    }
-
-    static TogglePanel() {
-        if this._userIsTyping {
-            return false
-        }
-
-        this._showInfoPanel ^= 1
-        this.__DrawMenu(() {
-            this.__UpdateWindowList()
-            this.__UpdatePanel()
-        })
-        return true
     }
 
     static OnWindowActivate(Callback) {
@@ -305,13 +257,15 @@ class TaskSwitcher {
             TaskSwitcher.OpenMenu({index: 2})
         }, state)
 
-        HotIf((*) => TaskSwitcher.isActive)
-        Hotkey('!Tab', (*) => TaskSwitcher.SelectNextWindow(), state)
-        Hotkey('+!Tab', (*) => TaskSwitcher.SelectPreviousWindow(), state)
+
+        HotIf((*) => altTabHotkeysEnabled && TaskSwitcher.isActive)
+        Hotkey('!Tab', (*) => TaskSwitcher.HighlightNextRow(), state)
+        Hotkey('+!Tab', (*) => TaskSwitcher.HighlightPreviousRow(), state)
         Hotkey('*!Escape', (*) {
             TaskSwitcher.CloseMenu()
             altTabHotkeysEnabled := false
         }, state)
+
 
         HotIf((*) => altTabHotkeysEnabled)
         Hotkey('~*Alt up', (*) {
@@ -341,6 +295,75 @@ class TaskSwitcher {
         Hotkey('!^Tab', (*) => 0)
     }
 
+    static HighlightPreviousRow() {
+        if this._highlightedRow > 1 {
+            this._highlightedRow -= 1
+        } else if this.wrapRowNavigation {
+            this._highlightedRow := this._windowList.Length
+        } else {
+            return  ; returns if no changes were made
+        }
+
+        this.__UpdateUIWhenHighlightedRowChanges()
+    }
+
+    static HighlightNextRow() {
+        if this._highlightedRow < this._windowList.Length {
+            this._highlightedRow += 1
+        } else if this.wrapRowNavigation {
+            this._highlightedRow := 1
+        } else {
+            return  ; returns if no changes were made
+        }
+
+        this.__UpdateUIWhenHighlightedRowChanges()
+    }
+
+    static HighlightFirstRow() {
+        if this._highlightedRow != 1 {
+            this._highlightedRow := 1
+            this.__UpdateUIWhenHighlightedRowChanges()
+        }
+    }
+
+    static HighlightLastRow() {
+        last := this._windowList.Length
+        if this._highlightedRow != last {
+            this._highlightedRow := last
+            this.__UpdateUIWhenHighlightedRowChanges()
+        }
+    }
+
+    /**
+     * TODO: name change
+     */
+    static __UpdateUIWhenHighlightedRowChanges() {
+        /**
+         * I have hotkeys that send {Up} and {Down} multiple times to make navigation easier.
+         * This code is an attempt to minimize issues that came with quickly-repeated navigation events.
+         */
+        SetTimer(() {
+            this.__KeepHighlightedRowVisible()
+            UI.DrawMenu(() {
+                UI.UpdateWindowList()
+                UI.UpdatePanel()
+            })
+        }, -30)
+    }
+
+    static TogglePanelVisibility() {
+        if this._userIsTyping {
+            return
+        }
+
+        this._showPanel ^= 1
+        UI.DrawMenu(() {
+            UI.UpdateWindowList()
+            UI.UpdatePanel()
+        })
+    }
+
+
     /**
      * Allows custom name overrides. This exists because I couldn't find Steam's actual DisplayName/ProductName.
      * Expects an even-amount of parameters as if you were passing them to a Map(key, value).
@@ -354,31 +377,43 @@ class TaskSwitcher {
     }
 
     static Call(options := {}) {
-        for option, value in options.OwnProps() {
-            if !this.HasOwnProp(option) {
-                throw Error(option ' option doesn`'t exist. Make sure you spelled it correctly.')
-            }
-            this.%option% := value
+        if colors := options.DeleteProp('colors') {
+            CopyOptionsFromObject(colors, 'colors')
         }
+
+        if textColors := options.DeleteProp('textColors') {
+            CopyOptionsFromObject(textColors, 'textColors')
+        }
+
+        CopyOptionsFromObject(options)
 
         if this.closeOnOutsideClick {
             passthrough := this.clickPassthrough ? '~' : ''
+
             ; closes task switcher if click happens outside the menu
-            HotIf((*) => TaskSwitcher.isOpen && !TaskSwitcher.hasMouseOver)
+            HotIf((*) => TaskSwitcher.isOpen && !TaskSwitcher.IsUnderMouse)
+
             for button in ['LButton', 'RButton', 'MButton', 'XButton1', 'XButton2'] {
+                ; applies passthrough and wildcard modifiers if applicable
                 key := Format('{}*{}', passthrough, button)
                 Hotkey(key, (*) => this.CloseMenu())
             }
             HotIf()
         }
 
-        if this.rowNumbers {
-            HotIf((key) => TaskSwitcher.isOpen && this.Menu.windows.Has(SubStr(key, -1)) && !GetKeyState('Shift'))
+        if this.showRowNumbers {
+            HotIf((key) => TaskSwitcher.isOpen && this._windowList.Has(SubStr(key, -1)) && !GetKeyState('Shift'))
+
             loop 9 {
                 Hotkey('*' A_Index, (key) => this.ActivateWindowAndCloseMenu(SubStr(key, -1)))
+                Hotkey('*' A_Index, (key) {
+                    numberPressed := SubStr(key, -1)
+                    this.ActivateWindowAndCloseMenu(numberPressed)  ; pass number pressed as index
+                })
             }
-            HotIf((key) => TaskSwitcher.isOpen && this.Menu.windows.Has(10)) && !GetKeyState('Shift')
-            Hotkey('*0', (key) => this.ActivateWindowAndCloseMenu(10))
+
+            HotIf((*) => TaskSwitcher.isOpen && this._windowList.Has(10)) && !GetKeyState('Shift')
+            Hotkey('*0', (*) => this.ActivateWindowAndCloseMenu(10))
             HotIf()
         }
 
@@ -394,22 +429,22 @@ class TaskSwitcher {
         this.__InitPanel()
         this.__InitWindow()
 
+        this.DeleteProp('Call')
+        return
 
         ; auxiliary setup initialization -----------------------------
+        CopyOptionsFromObject(options, propName := '') {
+            property := propName ? this.%propName% : this
+
+            for option, color in options.OwnProps() {
+                if !property.HasOwnProp(option) {
+                    throw Error(option ' option doesn`'t exist. Make sure you spelled it correctly.')
+                }
+                property.%option% := color
+            }
+        }
+
         ColorSetup() {
-            ; colors that depend on others when using 'Auto' must come after the dependent color in the arrays
-            textColors := ['searchTextColor', 'placeholderTextColor',
-                           'rowSelectedTextColor', 'mouseRowHoverTextColor', 'rowTextColor',
-                           'panelHeaderTextColor', 'panelBodyTextColor', 'mouseRowSelectedTextColor', 'panelTabTextColor']
-
-            colors := ['mainColor', 'topbarColor', 'rowTextColor', 'rowSelectedColor', 'mouseRowHoverBackgroundColor', 'panelBackgroundColor',
-                       'mouseRowHoverTextColor', 'mouseRowSelectedBackgroundColor', 'mouseRowSelectedTextColor', 'partitionColor', 'rowDividerColor',
-                       'rowSelectedTextColor', 'searchBackgroundColor', 'closeBackgroundColor', 'closeHoverBackgroundColor',
-                       'closeXColor', 'closeXHoverColor', 'panelIconBackgroundColor',
-                       'panelTabInactiveColor', 'panelTabHoverColor', 'panelTabSelectedColor', 'panelTabActiveColor',
-                       'panelIconLinesColor', 'placeholderTextColor', 'searchTextColor',
-                       'panelHeaderTextColor', 'panelBodyTextColor', 'panelTabTextColor']
-
             EnsureColorHasAlphaAndDefaultValue()
             EnsureTextColorsAreFormatted()
 
@@ -417,151 +452,137 @@ class TaskSwitcher {
              * Color Functions
              */
             EnsureTextColorsAreFormatted() {
-                for textColor in textColors {
-                    color := this.%textColor%
-                    try this.%textColor% := Format('{:08X}', color) ; 0xARGB to string
+                for name, textColor in this.textColors.OwnProps() {
+                    try this.textColors.%name% := Format('{:08X}', textColor) ; 0xARGB to string
                     catch {
-                        throw Error('The color: ' color '`nis incorrect for option: ' textColor)
+                        throw Error('The color: ' textColor '`nis incorrect for option: ' name)
                     }
                 }
             }
 
             EnsureColorHasAlphaAndDefaultValue() {
-                for property in colors {
-                    color := this.%property%
+                ; colors that depend on others when using 'Auto' must come after the dependent color
+                textColorDependencies := OrderedMap(
+                ;   color property                  ; dependent color
+                    'row',                          () => GetContrastingColor(this.colors.row),
+                    'rowHighlight',                 () => GetContrastingColorFromPossibleArray(this.colors.rowHighlight),
+                    'rowHoverHighlight',            () => GetContrastingColorFromPossibleArray(this.colors.rowHoverHighlight),
+                    'rowClickHighlight',            () => GetContrastingColorFromPossibleArray(this.colors.rowClickHighlight),
+                    'placeholder',                  () => GetAutoAdjustedColor(this.colors.searchBar, 80),
+                    'searchBar',                    () => GetContrastingColor(this.colors.searchBar),
+                    'panelHeader',                  () => GetContrastingColor(this.colors.panel),
+                    'panelBody',                    () => GetContrastingColor(this.colors.panel),
+                    'panelTab',                     () => GetContrastingColor(this.colors.panelTabInactive),
+                )
 
-                    if color = 'Auto' {
-                        switch property {
-                        case 'mainColor':
-                            value := this.__GetUserThemeColor()
-                            this.mainColor := value ? 0xFFFFFFFF : 0xFF1E1E1E
-                        case 'topbarColor':
-                            this.topbarColor := this.mainColor
-                        case 'panelBackgroundColor':
-                            this.panelBackgroundColor := this.mainColor
-                        case 'closeBackgroundColor':
-                            SetAutoAdjustedColor(property, this.mainColor)
-                        case 'rowDividerColor':
-                            SetAutoAdjustedColor(property, this.mainColor, 80)
-                        case 'searchBackgroundColor', 'panelIconBackgroundColor':
-                            SetAutoAdjustedColor(property, this.topbarColor)
-                        case 'placeholderTextColor':
-                            SetAutoAdjustedColor(property, this.searchBackgroundColor, 80)
-                        case 'closeHoverBackgroundColor':
-                            SetAutoAdjustedColor(property, this.mainColor)
-                        case 'closeXHoverColor':
-                            SetAutoAdjustedColor(property, this.closeHoverBackgroundColor)
-                        case 'partitionColor':
-                            SetAutoAdjustedColor(property, this.panelBackgroundColor)
-                        case 'panelTabActiveColor':
-                            SetAutoAdjustedColor(property, this.panelTabSelectedColor)
-                        case 'panelTabInactiveColor':
-                            SetAutoAdjustedColor(property, this.panelBackgroundColor)
-                        case 'panelTabHoverColor':
-                            SetAutoAdjustedColor(property, this.panelTabInactiveColor)
-                        case 'panelTabSelectedColor':
-                            SetAutoAdjustedColor(property, this.panelTabHoverColor, 20)
+                colorDependencies := OrderedMap(
+                ;   color property                  ; dependent color
+                    'row',                          () => this.__GetUserThemeColor() ? 0xFFFFFFFF : 0xFF1E1E1E,
+                    'rowHighlight',                 () => GetAutoAdjustedColorOfPossibleArray(this.colors.row, 40),
+                    'rowHoverHighlight',            () => GetAutoAdjustedColorOfPossibleArray(this.colors.row, 80),
+                    'rowClickHighlight',            () => GetAutoAdjustedColorOfPossibleArray(this.colors.rowHoverHighlight),
+                    'rowDivider',                   () => GetAutoAdjustedColor(this.colors.row, 80),
+                    'panel',                        () => this.colors.row,
+                    'topBar',                       () => this.colors.row,
+                    'partition',                    () => GetAutoAdjustedColor(this.colors.panel),
+                    'searchBar',                    () => GetAutoAdjustedColor(this.colors.topBar, 40),
+                    'closeButton',                  () => GetAutoAdjustedColor(this.colors.row),
+                    'closeButtonHoverHighlight',    () => GetAutoAdjustedColor(this.colors.row),
+                    'closeButtonX',                 () => GetContrastingColor(this.colors.closeButton),
+                    'closeButtonXHoverHighlight',   () => GetAutoAdjustedColor(this.colors.closeButtonHoverHighlight),
+                    'panelIcon',                    () => GetAutoAdjustedColor(this.colors.topBar),
+                    'panelIconLines',               () => GetContrastingColor(this.colors.panelIcon),
+                    'panelTabInactive',             () => GetAutoAdjustedColor(this.colors.panel),
+                    'panelTabHoverHighlight',       () => GetAutoAdjustedColor(this.colors.panelTabInactive),
+                    'panelTabClickHighlight',       () => GetAutoAdjustedColor(this.colors.panelTabHoverHighlight, 20),
+                    'panelTabActive',               () => GetAutoAdjustedColor(this.colors.panelTabClickHighlight),
+                )
 
-                        case 'rowSelectedColor':
-                            SetAutoAdjustedColorOfPossibleArray(property, this.mainColor)
-                        case 'mouseRowHoverBackgroundColor':
-                            SetAutoAdjustedColorOfPossibleArray(property, this.rowSelectedColor, 80)
-                        case 'mouseRowSelectedBackgroundColor':
-                            SetAutoAdjustedColorOfPossibleArray(property, this.mouseRowHoverBackgroundColor)
 
-                         case 'mouseRowHoverTextColor':
-                            SetContrastingColorFromPossibleArray(property, this.mouseRowHoverBackgroundColor)
-                        case 'rowSelectedTextColor':
-                            SetContrastingColorFromPossibleArray(property, this.rowSelectedColor)
+                AssignColors(colorDependencies, this.colors)
+                AssignColors(textColorDependencies, this.textColors)
 
-                        case 'closeXColor':
-                            SetContrastingColor(property, this.closeBackgroundColor)
-                        case 'panelIconLinesColor':
-                            SetContrastingColor(property, this.panelIconBackgroundColor)
-                        case 'placeholderTextColor', 'searchTextColor':
-                            SetContrastingColor(property, this.searchBackgroundColor)
-                        case 'rowTextColor':
-                            SetContrastingColor(property, this.mainColor)
-                        case 'panelHeaderTextColor', 'panelBodyTextColor':
-                            SetContrastingColor(property, this.panelBackgroundColor)
-                        case 'mouseRowSelectedTextColor':
-                            SetContrastingColor(property, this.mouseRowSelectedBackgroundColor)
-                        case 'panelTabTextColor':
-                            SetContrastingColor(property, this.panelTabInactiveColor)
-                        default:
-                            throw Error('Auto option is not supported for this property: ' property)
+                /**
+                 * @param {OrderedMap} dependencyList the source of colors
+                 * @param {Object} property the color object property to inherit new colors from dependencyList
+                 */
+                AssignColors(dependencyList, property) {
+                    for name, GetColor in dependencyList {
+                        color := property.%name%
+
+                        if color = 'Auto' {
+                            property.%name% := GetColor()
+                        } else if color is Array {
+                            for index, gradientColor in color {
+                                property.%name%[index] := gradientColor | 0x01000000
+                            }
+                        } else {
+                            property.%name% := color | 0x01000000
                         }
-
-                        continue
-                    }
-
-                     if color is Array {
-                        for index, color in color {
-                            this.%property%[index] := color | 0x01000000
-                        }
-                    } else {
-                        this.%property% := color | 0x01000000
                     }
                 }
 
                 ; supporting color functions
-                SetAutoAdjustedColor(property, color, offset := 60) {
-                    this.%property% := this.__ColorBrightnessAutoAdjust(color, offset) | 0x01000000
+                GetAutoAdjustedColor(color, offset := 60) {
+                    return this.__ColorBrightnessAutoAdjust(color, offset) | 0x01000000
                 }
 
-                SetContrastingColor(property, color, offset := 60) {
-                    this.%property% := this.__GetContrastingColor(color)
+                GetContrastingColor(color) {
+                    return this.__GetContrastingColor(color)
                 }
 
-                SetAutoAdjustedColorOfPossibleArray(property, color, offset := 60) {
+                GetAutoAdjustedColorOfPossibleArray(color, offset := 60) {
                     if color is Array {
                         color := color[1]
                     }
-                    SetAutoAdjustedColor(property, color, offset)
+                    return GetAutoAdjustedColor(color, offset)
                 }
 
-                SetContrastingColorFromPossibleArray(property, color) {
+                GetContrastingColorFromPossibleArray(color) {
                     if color is Array {
-                        color := color[Ceil(color.Length // 2)]
+                        middleIndex := Ceil(color.Length // 2)
+                        color := color[middleIndex]
                     }
-                    SetContrastingColor(property, color)
+                    return GetContrastingColor(color)
                 }
             }
         }
 
         VariousPropertiesSetup() {
-            if this.allowPanelDuringFiltering {
+            if this.showPanelDuringFiltering {
                 this.DefineProp('_searchText', {
                     Get: (self) => this._private_searchText,
                     Set: (self, value) => this._private_searchText := value
                 })
             }
 
-            this._topBarHeight := this._searchBarHeight + (this.marginY * 2)
-            this._showInfoPanel := this.showPanelOnOpen
-            this._searchText := this._placeholderSearchText
-            this._rowNumberWidth := this.rowNumbers ? 30 : 0
-            this._titleX := (this.iconSize + (2 * this.marginX)) + (this._rowNumberWidth)
+            this._topBarHeight   := this._searchBarHeight + (this.marginY * 2)
+            this._showPanel      := true
+            this._searchText     := this._placeholderSearchText
+            this._rowNumberWidth := this.showRowNumbers ? 30 : 0
+            this._titleX         := (this.iconSize + (2 * this.marginX)) + this._rowNumberWidth
             this._rowWithDivider := this.rowHeight + this.rowDividerHeight
 
-            if this.preventResize {
-                PreventResizeMenuHeight()
-            } else {
-                this.__RefreshWindows()
-                this.__UpdateTotalHeight()
+            if this.allowResize {
+                this.__RefreshWindowList()
+                this.__CalculateTotalHeight()
+            } else {    ; initialize *something* as the menu height
+                PreventResizeMenuHeightSetup()
             }
 
-            this._lastWindowListHeight := this._lastWindowHeight := this._lockedHeight := this._menuHeight
+            this._lastWindowListUIHeight := this._lastWindowUIHeight := this._lockedHeight := this._menuHeight
 
-            minWidthMultiplier := 0.2   ; window list and panel can't be less than 20% of the menu width
-            minWidthInPixels := this.menuWidth * minWidthMultiplier
-            this._listMinWidth := minWidthInPixels
-            this._infoPanelMinWidth := minWidthInPixels
+            minWidthInPixels := this.menuWidth * 0.2
+            maxWidthInPixels := this.menuWidth * 0.8
 
-            upperBounds := Max(this.menuWidth * (1 - this.defaultPanelSizePercent))
-            this._partitionX := Min(upperBounds, this.menuWidth - minWidthInPixels)
+            this._minResizableWidth := minWidthInPixels
 
-            PreventResizeMenuHeight() {
+            ; upperBounds      := this.menuWidth * (1 - this.defaultPanelSizePercent)
+            ; this._partitionPos := Min(upperBounds, this.menuWidth - minWidthInPixels) ; initialize to a valid position
+            partitionPos := this.menuWidth * (1 - this.defaultPanelSizePercent)
+            this._partitionPos := Max(minWidthInPixels, Min(maxWidthInPixels, partitionPos))
+
+            PreventResizeMenuHeightSetup() {
                 contentHeight := this._rowWithDivider * this.maxVisibleRows - this.rowDividerHeight
                 this._menuHeight := contentHeight + this._topBarHeight
             }
@@ -609,8 +630,6 @@ class TaskSwitcher {
                 }
             }
         }
-
-        this.DeleteProp('Call')
     }
 
 
@@ -625,13 +644,18 @@ class TaskSwitcher {
             return unset
         }() ?? unset
 
-        this.__UpdateTotalHeight()      ; necessary for certain this._selectedRow starting values when this.__ScrollToSelectedRow() is called
-        this.__KeepSelectedRowVisible()
-        this.__DrawMenu()
+        this.__CalculateTotalHeight()      ; necessary for certain this._highlightedRow starting values when this.__ScrollTohighlightedRow() is called
+        this.__KeepHighlightedRowVisible()
+        UI.DrawMenu(() {
+            UI.__UpdateSearchBar()
+            UI.UpdatePanelIcon()
+            UI.UpdateWindowList()
+            UI.UpdatePanel()
+        })
 
         switch this.coordinates {
         case 'Center', 'Recenter':
-            MonitorGetWorkArea(this.monitor, &left, &top, &right, &bottom)
+            MonitorGetWorkArea(this.monitorToDisplayOn, &left, &top, &right, &bottom)
             this._x := left + (right - left - this.menuWidth) / 2
             this._y := top + (bottom - top - this._menuHeight) / 2
         case 'Mouse':
@@ -642,7 +666,7 @@ class TaskSwitcher {
         }
     }
 
-    static __OpenMenu(options, sortedWindows := false) {
+    static __OpenMenu(options := {}, sortedWindows := false) {
         Critical(50)
         this._sortedWindows := sortedWindows
         OnMessage(0x200, this._OnMouseMove)
@@ -655,26 +679,25 @@ class TaskSwitcher {
 
         startingIndex := options.index ?? 1
 
-        this.__RefreshWindows(options)
-        this._selectedRow := Min(Max(1, startingIndex), this.Menu.windows.Length)
+        this.__RefreshWindowList(options)
+        this._highlightedRow := Min(Max(1, startingIndex), this._windowList.Length)
 
         this.__FirstDraw()
-        ; Critical(50)
         this.Menu.Show('w' this.menuWidth ' h' this._menuHeight)
         this._ih.Start()
         this._onMenuOpen(this.Menu)
         Critical('Off')
     }
 
-    static __CloseWindow(selectedRow := this._selectedRow) {
-        if !this.Menu.windows.Has(selectedRow) {
-            this.__RefreshWindows()
+    static __CloseWindow(highlightedRow := this._highlightedRow) {
+        if !this._windowList.Has(highlightedRow) {
+            this.__RefreshWindowList()
             this.__ApplySearchFilter()
-            this.__WindowListRefreshUI()
+            this.__RedrawWindowList()
             return
         }
 
-        window := this.Menu.windows[selectedRow]
+        window := this._windowList[highlightedRow]
         this._ih.Stop()
 
         WinClose(window.hwnd)
@@ -685,7 +708,7 @@ class TaskSwitcher {
         this._ih.Start()
 
         ; helps when window list shifts when window is closed and the bottom of a scrollable list is visible
-        switch this.Menu.windows.Length {
+        switch this._windowList.Length {
         case 1 + this.maxVisibleRows:
             this._scrollOffset := 0
             this._targetScrollOffset := 0
@@ -696,17 +719,17 @@ class TaskSwitcher {
             this._scrollOffset := Max(0, this._scrollOffset - rowHeight)
         }
 
-        this.__RefreshWindows()
+        this.__RefreshWindowList()
         this.__ApplySearchFilter()
-        this.__WindowListRefreshUI('override')
+        this.__RedrawWindowList('override')
     }
 
-    static __UpdateTotalHeight() {
-        if this.preventResize {
+    static __CalculateTotalHeight() {
+        if !this.allowResize {
             return this._lockedHeight
         }
 
-        totalRows := this.Menu.windows.Length
+        totalRows := this._windowList.Length
 
         if totalRows > this.maxVisibleRows {
             ; show partial row to indicate scrollability
@@ -720,481 +743,6 @@ class TaskSwitcher {
 
         totalHeight := this._topBarHeight + contentHeight
         return this._menuHeight := totalHeight
-    }
-
-    /**
-     * @param {String/Func} Updates 'All' or a function that calls the appropriate update methods
-     */
-    static __DrawMenu(Updates := 'All') {
-        if this._isDrawing {
-            return
-        }
-
-        ; Critical(10)
-        this._isDrawing := true
-        if Updates = 'All' {
-            this.__UpdateSearchBar()
-            this.__UpdatePanelIcon()
-            this.__UpdateWindowList()
-            this.__UpdatePanel()
-        } else {
-            Updates()
-        }
-
-        this.__UpdateWindow()
-        this._isDrawing := false
-        ; Critical('Off')
-    }
-
-    static __DrawTopBar(width, height) {
-        TopBar := this._sections['TopBar'].graphics
-        Gdip_GraphicsClear(TopBar, this.topbarColor | 0x01000000)
-    }
-
-    static __UpdatePanelIcon() {
-        PanelIcon := this._sections['PanelIcon'].graphics
-        Gdip_GraphicsClear(PanelIcon, this.topbarColor)
-
-        ; draw panelIcon background
-        if this._clicked.item = 'panelIcon' {    ; highlight panel icon
-            pBrush := Gdip_BrushCreateSolid(this.__ColorBrightnessAutoAdjust(this.panelIconBackgroundColor))
-        } else {    ; normal draw
-            pBrush := Gdip_BrushCreateSolid(this.panelIconBackgroundColor)
-        }
-
-        previousSmoothingMode := Gdip_SetSmoothingMode(PanelIcon, 4)
-
-        panelIconR := 6     ; radius
-        background := this._panelIcon.bg
-        Gdip_FillRoundedRectangle(PanelIcon, pBrush, 0, 0, background.size, background.size, panelIconR)
-        Gdip_DeleteBrush(pBrush)
-
-        line := this._panelIcon.line
-        panelIconY := line.y
-
-        ; draw panelIcon lines
-        pBrush := Gdip_BrushCreateSolid(this.panelIconLinesColor)
-        loop 3 {
-            Gdip_FillRoundedRectangle(PanelIcon, pBrush, line.x, panelIconY, line.w, line.h, 2)
-            panelIconY += line.spacing * 2 ; this correctly advances Y by (line height + space height)
-        }
-        Gdip_DeleteBrush(pBrush)
-        Gdip_SetSmoothingMode(PanelIcon, previousSmoothingMode)
-    }
-
-    static __UpdateSearchBar() {
-        SearchBar := this._sections['SearchBar'].graphics
-        Gdip_GraphicsClear(SearchBar, this.topbarColor)
-        previousSmoothingMode := Gdip_SetSmoothingMode(SearchBar, 4)
-
-        searchBarRect := this._searchBarRect
-
-        ; search bar background
-        if this.searchBackgroundColor != this.searchTextColor {
-            pBrush := Gdip_BrushCreateSolid(this.searchBackgroundColor)
-            Gdip_FillRoundedRectangle(SearchBar, pBrush, 0, 0, searchBarRect.x2, searchBarRect.h, searchBarRect.r)
-            Gdip_DeleteBrush(pBrush)
-        }
-
-        ; search bar text
-        displayText := SubStr(this._searchText . Chr(0x200B), 1, 60)
-
-        searchBarOptions := 'x10 y10 s16 '
-        searchBarOptions .= (this._searchText = this._placeholderSearchText)
-            ? 'Italic c' this.placeholderTextColor  ; placeholder text
-            : 'Bold c' this.searchTextColor         ; user-input text
-
-        Gdip_TextToGraphics(searchBar, displayText, searchBarOptions, 'Arial', this._searchBarRect.x2 - (this.marginX * 2) - 55, searchBarRect.h)
-        Gdip_SetSmoothingMode(SearchBar, previousSmoothingMode)
-    }
-
-    static __UpdateWindowList() {
-        width := this._showInfoPanel ? this._partitionX : this.menuWidth
-        height := this.__UpdateTotalHeight()
-
-        if width != this._lastWindowListWidth || height != this._lastWindowListHeight {
-            this._lastWindowListWidth := width
-            this._lastWindowListHeight := height
-            this.__DestroyGDIPSection('WindowList')
-            this.__CreateGDIPSection('WindowList', width, height)
-        }
-
-        WindowList := this._sections['WindowList'].graphics
-        Gdip_GraphicsClear(WindowList)
-
-        Gdip_SetInterpolationMode(WindowList, 7)
-
-        ; background
-        pBrush := Gdip_BrushCreateSolid(this.mainColor)
-        Gdip_FillRectangle(WindowList, pBrush, 0, 0, width, height)
-        Gdip_DeleteBrush(pBrush)
-
-        ; pre-loop variable initalization
-        maxTextWidth := width - this.iconSize - 15 - 40
-
-        closeButtonSize := this.closeButtonSize
-        closeButtonX := width - this.marginX - closeButtonSize - 10
-        closeButtonY := (this.rowHeight - closeButtonSize) / 2
-        closeButtonOffset := closeButtonSize / 4
-
-        closeButton := {
-            line1: {
-                x: closeButtonX + closeButtonOffset,
-                start: closeButtonX + closeButtonSize - closeButtonOffset,
-            },
-
-            line2: {
-                x: closeButtonX + closeButtonSize - closeButtonOffset,
-                start: closeButtonX + closeButtonOffset
-            },
-        }
-
-        if this.fullLengthDividers {
-            dividerX := 0
-            dividerWidth := width
-        } else {
-            dividerX := this.marginX
-            dividerWidth := width - (this.marginX * 2)
-        }
-
-        this._windowRects := []
-        this._closeButtonRects := []
-
-        rowX := this.rowNumbers ? 30 : 0
-
-        for index, window in this.Menu.windows {
-            rowY := this._topBarHeight + ((index - 1) * this._rowWithDivider) - this._scrollOffset
-
-            if rowY + this.rowHeight < this._topBarHeight || rowY > height {
-                continue
-            }
-
-            y1 := Max(rowY, this._topBarHeight)
-
-            this._windowRects.Push({
-                x1: 0,
-                y1: Max(rowY, this._topBarHeight),
-                x2: width,
-                y2: y1 + this.rowHeight,
-                window: window,
-                actualIndex: index
-            })
-
-            DrawHighlightedRow(index)
-            DrawIcon(window)
-            DrawWindowText(index, window)
-            DrawCloseButton(index)
-            DrawDivider(index)
-        }
-
-        Gdip_SetInterpolationMode(WindowList, 2)
-
-        /**
-         * supporting functions
-         */
-
-        DrawIcon(window) {
-            iconX := this.marginX + this._rowNumberWidth
-            iconY := rowY + (this.rowHeight - this.iconSize) / 2
-            this.__DrawIcon(window, iconX, iconY)
-        }
-
-        DrawWindowText(index, window) {
-            sameRow := this._hoveredOver = this._selectedRow
-            if sameRow {
-                mouse := this._lastUsedDevice = 'mouse'
-                if mouse && this._hoveredOver = index {
-                    textColor := this._clicked.item = 'row'
-                        ? this.mouseRowSelectedTextColor
-                        : this.mouseRowHoverTextColor
-                } else if this._selectedRow = index {
-                    textColor := this.rowSelectedTextColor
-                } else {
-                    textColor := this.rowTextColor
-                }
-            } else if this._hoveredOver = index {
-                textColor := this._clicked.item = 'row'
-                    ? this.mouseRowSelectedTextColor
-                    : this.mouseRowHoverTextColor
-            } else if this._selectedRow = index {
-                textColor := this.rowSelectedTextColor
-            } else {
-                textColor := this.rowTextColor
-            }
-
-            if this.rowNumbers && index <= 10 {
-                x := 'x' this.marginX
-                y := 'y' rowY + (this.rowHeight - 24) / 2
-
-                Gdip_TextToGraphics(WindowList, SubStr(index, -1), x . ' ' y . ' Bold s24 c' textColor, 'Arial', 20, 20)
-            }
-
-            ; truncate text before rendering instead of letting Gdip scale it
-            truncatedName := this.__TruncateTextToWidth(window.name, 18, maxTextWidth)
-            truncatedTitle := this.__TruncateTextToWidth(window.title, 16, maxTextWidth)
-
-            windowOptions := 'x' this._titleX ' y' (rowY +  8) ' s18 Bold c' textColor
-            titleOptions  := 'x' this._titleX ' y' (rowY + 28) ' s16 c' textColor
-
-            ; pass a very large width to prevent scaling, since we've already truncated
-            Gdip_TextToGraphics(WindowList, truncatedName, windowOptions, 'Arial', 5000, 20)
-            Gdip_TextToGraphics(WindowList, truncatedTitle, titleOptions, 'Arial', 5000, 20)
-        }
-
-        DrawHighlightedRow(index) {
-            switch this._clicked.item {
-            case 'row', 'close':
-                clickedIndex := this._clicked.index
-            default:
-                clickedIndex := 0
-            }
-
-            if clickedIndex = index {
-                HighlightRow(this.mouseRowSelectedBackgroundColor)
-                return
-            }
-
-            sameRow := this._hoveredOver = this._selectedRow
-            if sameRow {
-                mouse := this._lastUsedDevice = 'mouse'
-                if mouse && this._hoveredOver = index {
-                    HighlightRow(this.mouseRowHoverBackgroundColor)
-                } else if this._selectedRow = index {
-                    HighlightRow(this.rowSelectedColor)
-                }
-                return
-            }
-
-            if this._hoveredOver = index {
-                HighlightRow(this.mouseRowHoverBackgroundColor)
-            } else if this._selectedRow = index {
-                HighlightRow(this.rowSelectedColor)
-            }
-
-            HighlightRow(color) {
-                ; create a gradient.
-                if !(color is Array) {
-                    pBrushHover := Gdip_BrushCreateSolid(color)
-                    Gdip_FillRectangle(WindowList, pBrushHover, 0, rowY, width, this.rowHeight)
-                    Gdip_DeleteBrush(pBrushHover)
-                    return
-                }
-
-                previousSmoothingMode := Gdip_SetSmoothingMode(WindowList, 0)
-                colors := color
-                colorCount := colors.Length
-                colorHeight := (this.rowHeight / colorCount)
-
-                if colorCount = 2 {
-                    color1 := colors[1]
-                    color2 := colors[2]
-
-                    pBrushHover := Gdip_BrushCreateSolid(color1)
-                    Gdip_FillRectangle(WindowList, pBrushHover, 0, rowY, width, colorHeight)
-                    Gdip_DeleteBrush(pBrushHover)
-
-                    pBrushHover := Gdip_CreateLineBrushFromRect(0, rowY + colorHeight, width, colorHeight, color1, color2, 1)
-                    Gdip_FillRectangle(WindowList, pBrushHover, 0, rowY + colorHeight, width, colorHeight)
-                    Gdip_DeleteBrush(pBrushHover)
-
-                } else {
-                    gradientSize := this.rowHeight / (colorCount - 1)
-
-                    loop colorCount - 1 {
-                        color1 := colors[A_Index]
-                        color2 := colors[A_Index+1]
-
-                        offset := gradientSize * (A_Index - 1)
-                        pBrushHover := Gdip_CreateLineBrushFromRect(0, rowY + offset, width, gradientSize, color1, color2, 1)
-                        Gdip_FillRectangle(WindowList, pBrushHover, 0, rowY + offset, width, gradientSize)
-                        Gdip_DeleteBrush(pBrushHover)
-                    }
-                }
-
-                Gdip_SetSmoothingMode(WindowList, previousSmoothingMode)
-            }
-        }
-
-        DrawCloseButton(index) {
-            ; draw close button (X)
-            if this._hoveredOver = index || this.showAllCloseButtons {
-                closeButtonY += rowY
-
-                this._closeButtonRects.Push({
-                    x1: closeButtonX,
-                    y1: closeButtonY,
-                    x2: closeButtonX + closeButtonSize,
-                    y2: closeButtonY + closeButtonSize,
-                    actualIndex: index,
-                })
-
-                ; close background color - highlighted or not
-                isHoveringCloseButton := (this._hoveredCloseButton = index)
-                if isHoveringCloseButton {
-                    pBrushClose := Gdip_BrushCreateSolid(this.closeHoverBackgroundColor)
-                    pPen := Gdip_CreatePen(this.closeXHoverColor, 2)
-                } else {
-                    pBrushClose := Gdip_BrushCreateSolid(this.closeBackgroundColor)
-                    pPen := Gdip_CreatePen(this.closeXColor, 2)
-                }
-
-                previousSmoothingMode := Gdip_SetSmoothingMode(WindowList, 4)
-                Gdip_FillEllipse(WindowList, pBrushClose, closeButtonX, closeButtonY, closeButtonSize, closeButtonSize)
-                Gdip_SetSmoothingMode(WindowList, previousSmoothingMode)
-                Gdip_DeleteBrush(pBrushClose)
-
-                lineEndPoint := closeButtonY + closeButtonSize - closeButtonOffset
-
-                ; line 1
-                Gdip_DrawLine(WindowList, pPen, closeButton.line1.x, closeButtonY + closeButtonOffset, closeButton.line1.start, lineEndPoint)
-
-                ; line 2
-                Gdip_DrawLine(WindowList, pPen, closeButton.line2.x, closeButtonY + closeButtonOffset, closeButton.line2.start, lineEndPoint)
-                Gdip_DeletePen(pPen)
-            }
-        }
-
-        DrawDivider(index) {
-            if index < this.Menu.windows.Length {
-                dividerY := rowY + this.rowHeight
-                if dividerY > this._topBarHeight && dividerY < height {
-                    pBrushDiv := Gdip_BrushCreateSolid(this.rowDividerColor)
-                    Gdip_FillRectangle(WindowList, pBrushDiv, dividerX, dividerY, dividerWidth, this.rowDividerHeight)
-                    Gdip_DeleteBrush(pBrushDiv)
-                }
-            }
-        }
-    }
-
-    static __UpdatePanel() {
-        if !this._showInfoPanel {
-            this.__CleanupThumbnail()
-            return
-        }
-
-        width := this.menuWidth - this._partitionX
-        height := this._menuHeight - this._topBarHeight
-
-        if this._lastWindowListWidth != this._partitionX || height != this._lastWindowListHeight {
-            this.__DestroyGDIPSection('Panel')
-            this.__CreateGDIPSection('Panel', width, height)
-        }
-
-        Panel := this._sections['Panel'].graphics
-        Gdip_GraphicsClear(Panel, 0x01000000)
-
-        ; draw panel background
-        pBrushPanel := Gdip_BrushCreateSolid(this.panelBackgroundColor)
-        Gdip_FillRectangle(Panel, pBrushPanel, 0, 0, width, height)
-        Gdip_DeleteBrush(pBrushPanel)
-
-        ; partition
-        partitionWidth := this.partitionWidth
-        if this.fullLengthPartition {
-            partitionY := 0
-            partitionHeight := height
-        } else {
-            partitionY := this.marginY
-            partitionHeight := height - (this.marginY * 2)
-        }
-
-        pBrushPartition := Gdip_BrushCreateSolid(this.partitionColor)
-        Gdip_FillRectangle(Panel, pBrushPartition, 0, partitionY, partitionWidth, partitionHeight)
-        Gdip_FillRectangle(Panel, pBrushPartition, 0, 0, width, partitionWidth)
-        Gdip_DeleteBrush(pBrushPartition)
-
-        this.__DrawPanelTabs(Panel)
-
-        ; draw tab content
-        tabHeight := this._tabBarHeight
-        useMousedRow := this.mouseRowHoverUpdatesPanel && this._lastUsedDevice = 'mouse' && this._hoveredOver
-        row := useMousedRow ? this._hoveredOver : this._selectedRow
-
-        if this.Menu.windows.Length = 0 {
-            Panel := this._sections['Panel'].graphics
-            if this._panelTab = 'preview'  {
-                availableWidth := width - (this.marginX * 2)
-                availableHeight := height - (this.marginY * 2)
-
-                x := this.marginX
-                y := tabHeight + this.marginY + (availableHeight / 2) - 8
-
-                options := 'x' x ' y' y ' s24 cFFC0C0C0 Center Bold'
-                Gdip_TextToGraphics(Panel, 'No matches', options, 'Arial', availableWidth, availableHeight)
-                this.__CleanupThumbnail()
-            } else {
-                x := this.marginX
-                y := tabHeight + this.marginY
-                Gdip_TextToGraphics(Panel, "No information available", 'x' x ' y' y ' s16 cFFC0C0C0', 'Arial', width - (this.marginX * 2), 30)
-            }
-            return
-        }
-
-        if row > 0 && row <= this.Menu.windows.Length {
-            window := this.Menu.windows[row]
-
-            if this._panelTab = 'preview' {
-                this.__UpdatePanelPreview(window, 0, tabHeight, width, height - tabHeight)
-            } else {
-                this.__UpdatePanelInfo(window, 0, tabHeight, width, height - tabHeight)
-            }
-        }
-    }
-
-    static __DrawPanelTabs(Panel := this._sections['Panel'].graphics) {
-        static tabs := ['Preview', 'Info']
-        this._panelTabRects := []
-
-        width := this.menuWidth - this._partitionX
-        tabHeight := this._tabBarHeight
-
-        spacing := this.marginX
-        partitionSize := this.partitionWidth
-        halfParitionSize := this.partitionWidth / 2
-        y := this.marginY + partitionSize
-
-        ; available space for tabs (minus partition and margins)
-        availableWidth := width - halfParitionSize - (spacing * 3)     ; left margin, between, right margin
-        tabWidth := availableWidth / tabs.Length
-
-        oldMode := Gdip_SetSmoothingMode(Panel, 4)
-
-        for index, tabName in tabs {
-            offset := index = 1 ? halfParitionSize : 0
-            x := offset + spacing + ((index - 1) * (tabWidth + spacing))
-
-            bgColor := GetColorAdjustmentValue(index, tabName)
-            pBrush := Gdip_BrushCreateSolid(bgColor)
-
-            Gdip_FillRoundedRectangle(Panel, pBrush, x, y, tabWidth, tabHeight - this.marginY, 6)
-            Gdip_DeleteBrush(pBrush)
-
-            textColor := this.panelTabTextColor
-            options := 'x' x ' y' (y + 6) ' s14 Bold c' textColor ' Center'
-            Gdip_TextToGraphics(Panel, tabName, options, 'Arial', tabWidth, tabHeight - (y * 2))
-
-            this._panelTabRects.Push({
-                x1:  x,
-                y1:  y,
-                x2:  x + tabWidth,
-                y2:  y + (tabHeight - this.marginY),
-                tab: tabName
-            })
-        }
-
-        Gdip_SetSmoothingMode(Panel, oldMode)
-
-        GetColorAdjustmentValue(index, tabName) {
-            if this._clicked.item = tabName {                                       ; tab is clicked
-                return this.panelTabSelectedColor
-            } else if this._hoveredPanelTab = (index = 1 ? 'preview' : 'info') {    ; tab is hovered
-                return this.panelTabHoverColor
-            } else if this._panelTab = (index = 1 ? 'preview' : 'info') {           ; tab is active
-                return this.panelTabActiveColor
-            } else {
-                return this.panelTabInactiveColor
-            }
-        }
     }
 
     static __OnMouseMove(wParam, lParam, msg, hwnd) {
@@ -1212,12 +760,12 @@ class TaskSwitcher {
             this.__OnPartitionMove(x)
             DllCall('SetCursor', 'Ptr', DllCall('LoadCursor', 'Ptr', 0, 'Ptr', 32646))
             return
-        } else if this.__IsOnPartition(x, y) {
+        } else if this.__IsMouseOnPartition(x, y) {
             DllCall('SetCursor', 'Ptr', DllCall('LoadCursor', 'Ptr', 0, 'Ptr', 32646))
             return
         }
 
-        if this._isDrawing {
+        if UI._isDrawing {
             return
         }
 
@@ -1225,17 +773,17 @@ class TaskSwitcher {
             return
         }
 
-        this._canScroll := (y > this._topBarHeight) && x < (this._showInfoPanel ? this._partitionX : this.menuWidth)
-        if (y > this._topBarHeight) && x < (this._showInfoPanel ? this._partitionX : this.menuWidth) {
+        this._canScroll := (y > this._topBarHeight) && x < (this._showPanel ? this._partitionPos : this.menuWidth)
+        if (y > this._topBarHeight) && x < (this._showPanel ? this._partitionPos : this.menuWidth) {
             this._hoveredPanelTab := ''
             this._canScroll := true
 
             if this.__MouseOverRowOrCloseButton(x, y) {
                 this._lastUsedDevice := 'mouse'
-                this.__DrawMenu(() {
-                    this.__UpdateWindowList()
-                    if this.mouseRowHoverUpdatesPanel {
-                        this.__UpdatePanel()
+                UI.DrawMenu(() {
+                    UI.UpdateWindowList()
+                    if this.allowMouseToUpdatePanel {
+                        UI.UpdatePanel()
                     }
                 })
             }
@@ -1246,15 +794,15 @@ class TaskSwitcher {
         this._hoveredCloseButton := 0
         if this._hoveredOver {
             this._hoveredOver := 0
-            this.__DrawMenu(() {
-                this.__UpdateWindowList()
+            UI.DrawMenu(() {
+                UI.UpdateWindowList()
             })
         }
 
         oldHoveredTab := this._hoveredPanelTab
 
-        if this._showInfoPanel && x >= this._partitionX && y >= this._topBarHeight {
-            panelRelativeX := x - this._partitionX
+        if this._showPanel && x >= this._partitionPos && y >= this._topBarHeight {
+            panelRelativeX := x - this._partitionPos
             panelRelativeY := y - this._topBarHeight
 
             for rect in this._panelTabRects {
@@ -1271,7 +819,7 @@ class TaskSwitcher {
             this._hoveredPanelTab := ''
         }
         if oldHoveredTab != this._hoveredPanelTab {
-            this.__DrawMenu(() => this.__UpdatePanel())
+            UI.DrawMenu(() => UI.UpdatePanel())
         }
 
         TrackMouseLeave(hwnd) {
@@ -1291,19 +839,19 @@ class TaskSwitcher {
         static props := Buffer(48, 0)
 
         if !WinExist(window.hwnd) {
-            Panel := this._sections['Panel'].graphics
+            Panel := UI._sections['Panel'].graphics
             x := panelX + this.marginX
             y := startY + this.marginY
             Gdip_TextToGraphics(Panel, "Window closed", 'x' x ' y' y ' s16 cFFC0C0C0', 'Arial', panelWidth - (this.marginX * 2), 30)
-            this.__RefreshWindows()
+            this.__RefreshWindowList()
             this.__ApplySearchFilter()
-            this.__WindowListRefreshUI()
+            this.__RedrawWindowList()
             return
         }
 
         ; if window is minimized, the live preview is shortened but enlarged version of the toolbar which is not what we want
         if WinGetMinMax(window.hwnd) = -1 {
-            Panel := this._sections['Panel'].graphics
+            Panel := UI._sections['Panel'].graphics
             availableWidth := panelWidth - (this.marginX * 2)
             availableHeight := panelHeight - (this.marginY * 2)
 
@@ -1352,7 +900,7 @@ class TaskSwitcher {
         destWidth := Min(maxWidth, Round(maxHeight * sourceAspect))
         destHeight := Min(maxHeight, Round(destWidth / sourceAspect))
 
-        destX := this._partitionX + margin + (maxWidth - destWidth) / 2
+        destX := this._partitionPos + margin + (maxWidth - destWidth) / 2
         destY := this._topBarHeight + startY + margin + (maxHeight - destHeight) / 2
 
         NumPut(
@@ -1380,17 +928,17 @@ class TaskSwitcher {
 
     static __UpdatePanelInfo(window, panelX, startY, panelWidth, panelHeight) {
         if !WinExist(window.hwnd) {
-            Panel := this._sections['Panel'].graphics
+            Panel := UI._sections['Panel'].graphics
             x := panelX + this.marginX
             y := startY + this.marginY
             Gdip_TextToGraphics(Panel, "Window closed", 'x' x ' y' y ' s16 cFFC0C0C0', 'Arial', panelWidth - (this.marginX * 2), 30)
-            this.__RefreshWindows()
+            this.__RefreshWindowList()
             this.__ApplySearchFilter()
-            this.__WindowListRefreshUI()
+            this.__RedrawWindowList()
             return
         }
 
-        Panel := this._sections['Panel'].graphics
+        Panel := UI._sections['Panel'].graphics
         margin := this.marginX
         x := panelX + margin
         y := startY + margin
@@ -1399,8 +947,8 @@ class TaskSwitcher {
         fontSize := 16
         maxWidth := panelWidth - (margin * 2)
 
-        headerOptions := Format('x{} s{} Bold c{}', x, fontSize, this.panelHeaderTextColor)
-        descriptionOptions := Format('x{} s{} c{}', (x + 10), fontSize, this.panelBodyTextColor)
+        headerOptions := Format('x{} s{} Bold c{}', x, fontSize, this.textColors.panelHeader)
+        descriptionOptions := Format('x{} s{} c{}', (x + 10), fontSize, this.textColors.panelBody)
 
         hFont    := Gdip_FontFamilyCreate('Arial')
         headFont := Gdip_FontCreate(hFont, fontSize + 2, 1)
@@ -1487,78 +1035,41 @@ class TaskSwitcher {
         }
     }
 
-    static __UpdateWindow() {
-        width := this.menuWidth
-        height := this._menuHeight
-
-        if height != this._lastWindowHeight {
-            this.__DestroyGDIPSection('Window')
-            this.__CreateGDIPSection('Window', width, height)
-            this._lastWindowHeight := height
-        }
-
-        Window := this._sections['Window']
-        Gdip_GraphicsClear(Window.graphics, 0x01000000)
-
-        listWidth := this._showInfoPanel ? this._partitionX : width
-        panelIcon := this._panelIcon.bg
-        searchBar := this._searchBarRect
-        sections  := this._sections
-
-        BitBlt(Window.hdc, 0, 0, listWidth, height, sections['WindowList'].hdc, 0, 0)
-        BitBlt(Window.hdc, 0, 0, width, this._topBarHeight, sections['TopBar'].hdc, 0, 0)
-        BitBlt(Window.hdc, panelIcon.x1, panelIcon.y1, panelIcon.size, panelIcon.size, sections['PanelIcon'].hdc, 0, 0)
-        BitBlt(Window.hdc, searchBar.x1, searchBar.y1, searchBar.x2, searchBar.h, sections['SearchBar'].hdc, 0, 0)
-
-        if this._showInfoPanel {
-            panelWidth := width - this._partitionX
-            panelHeight := height - this._topBarHeight
-            BitBlt(Window.hdc, this._partitionX, this._topBarHeight, panelWidth, panelHeight, sections['Panel'].hdc, 0, 0)
-        }
-
-        if this.coordinates = 'Recenter' {
-            MonitorGetWorkArea(this.monitor, &left, &top, &right, &bottom)
-            this._y := top + (bottom - top - height) / 2
-        }
-
-        UpdateLayeredWindow(this.Menu.Hwnd, Window.hdc, this._x, this._y, width, height)
-    }
-
     static __InitTopBar() {
         width := this.menuWidth
         height := this._topBarHeight
-        this.__CreateGDIPSection('TopBar', width, height)
-        this.__DrawTopBar(width, height)
+        UI.__CreateGDIPSection('TopBar', width, height)
+        UI.__DrawTopBar()
     }
 
     static __InitSearchBar() {
         height := this._searchBarRect.h
         width := this._searchBarRect.x2
-        this.__CreateGDIPSection('SearchBar', width, height)
+        UI.__CreateGDIPSection('SearchBar', width, height)
     }
 
     static __InitPanelIcon() {
         size := this._searchBarRect.h
-        this.__CreateGDIPSection('PanelIcon', size, size)
+        UI.__CreateGDIPSection('PanelIcon', size, size)
     }
 
     static __InitWindowList() {
-        width  := this._showInfoPanel ? this._partitionX : this.menuWidth
-        height := this.__UpdateTotalHeight()
-        this.__CreateGDIPSection('WindowList', width, height)
+        width  := this._showPanel ? this._partitionPos : this.menuWidth
+        height := this.__CalculateTotalHeight()
+        UI.__CreateGDIPSection('WindowList', width, height)
     }
 
     static __InitPanel() {
-        this.__CreateGDIPSection('Panel', this._partitionX, this._menuHeight - this._topBarHeight)
+        UI.__CreateGDIPSection('Panel', this._partitionPos, this._menuHeight - this._topBarHeight)
     }
 
     static __InitWindow() {
-        this.__CreateGDIPSection('Window', this.menuWidth, this._menuHeight)
+        UI.__CreateGDIPSection('Window', this.menuWidth, this._menuHeight)
     }
 
-    ; parameter only exists for the reason of closing a window, so the nᵗʰ selected window is still selected
-    static __WindowListRefreshUI(overrideSelectedRow := false) {
-        totalRows := this.Menu.windows.Length
+    ; parameter only exists for the reason of closing a window, so the nᵗʰ highlighted window is still highlighted
+    static __RedrawWindowList(overridehighlightedRow := false) {
+        totalRows := this._windowList.Length
 
         ; reset scroll if list was empty and now has results
         if this._lastWindowCount = 0 && totalRows > 0 {
@@ -1568,39 +1079,39 @@ class TaskSwitcher {
 
         this._lastWindowCount := totalRows
 
-        if this.alwaysHighlightFirstRow && !overrideSelectedRow {
-            this._selectedRow := 1
+        ; validate the highlighted row
+        if this.alwaysHighlightFirstRow && !overridehighlightedRow {
+            this._highlightedRow := 1
         } else {
-            totalRows := this.Menu.windows.Length
-            if this._selectedRow > totalRows {
-                this._selectedRow := Max(1, totalRows)  ; ensure selected row is never 0 or scrollOffset will offset itself when list becomes empty during filtering
+            totalRows := this._windowList.Length
+            if this._highlightedRow > totalRows {
+                this._highlightedRow := Max(1, totalRows)  ; ensure highlighted row is never 0 or scrollOffset will offset itself when list becomes empty during filtering
             }
         }
 
-        if this.preventResize {
-            height := this._lockedHeight
-        } else {
+        ; update window list UI height if applicable
+        if this.allowResize {
             height := this._menuHeight
-            if height != this._lastWindowListHeight {
-                this._lastWindowListHeight := height
+            if height != this._lastWindowListUIHeight {
+                this._lastWindowListUIHeight := height
             }
         }
 
-        this.__DrawMenu(() {
-            this.__UpdateSearchBar()
-            this.__UpdateWindowList()
-            this.__KeepSelectedRowVisible()
-            this.__UpdatePanel()
+        UI.DrawMenu(() {
+            UI.__UpdateSearchBar()
+            UI.UpdateWindowList()
+            this.__KeepHighlightedRowVisible()
+            UI.UpdatePanel()
         })
     }
 
     static __ApplySearchFilter() {
         if this._searchText = this._placeholderSearchText || StrLen(this._searchText) = 0 {
-            this.Menu.windows := this._allWindows.Clone()
+            this._windowList := this._allWindows.Clone()
             return
         }
 
-        this.Menu.windows := this.__PerformSearch()
+        this._windowList := this.__PerformSearch()
     }
 
     static __PerformSearch() {
@@ -1613,9 +1124,8 @@ class TaskSwitcher {
         return matches
     }
 
-
-    static __RefreshWindows(options := {}) {
-        list := this.__AltTabWindows(options)
+    static __RefreshWindowList(options := {}) {
+        list := this.__GetAltTabWindowList(options)
         windows := []
 
         for id in list {
@@ -1641,14 +1151,14 @@ class TaskSwitcher {
         }
 
         this._allWindows  := windows.Clone()  ; store complete list
-        this.Menu.windows := windows
+        this._windowList := windows
 
         SortWindows() {
             i := 2
             while i <= windows.Length {
                 temp := windows[i]
                 j := i - 1
-                while j >= 1 and StrCompare(windows[j].name, temp.name) > 0 {
+                while j >= 1 && StrCompare(windows[j].name, temp.name) > 0 {
                     windows[j + 1] := windows[j]
                     j--
                 }
@@ -1687,22 +1197,16 @@ class TaskSwitcher {
     static __DrawIcon(window, x, y) {
         try path := window.process
         catch {
-            this.__RefreshWindows()
-            this.__WindowListRefreshUI()
+            this.__RefreshWindowList()
+            this.__RedrawWindowList()
             return
         }
 
-        cacheKey := path
-
-        if !this._iconCache.Has(cacheKey) {
-            GetIcon(window.hwnd)
-        }
-
-        iconData := this._iconCache[cacheKey]
+        iconData := GetIconData(window.hwnd)
         pBitmap := iconData.bitmap
 
-        if pBitmap && Gdip_GetImageWidth(pBitmap) {
-            WindowList := this._sections['WindowList'].graphics
+        if pBitmap {
+            WindowList := UI._sections['WindowList'].graphics
 
             ; draw UWP icons slightly larger to compensate for smaller source images
             if iconData.isUWP {
@@ -1712,19 +1216,20 @@ class TaskSwitcher {
             } else {
                 Gdip_DrawImage(WindowList, pBitmap, x, y, this.iconSize, this.iconSize)
             }
+
+            Gdip_DisposeImage(pBitmap)
         }
 
-        ; get icon function
-        GetIcon(hwnd) {
+        GetIconData(hwnd) {
+            pBitmap := 0
+            isUWP := false
+
             uwpPath := ''
             if InStr(path, 'WindowsApps') || InStr(path, 'ApplicationFrameHost.exe') {
                 try {
                     uwpPath := this.__GetLargestUWPLogoPath(hwnd)
                 }
             }
-
-            pBitmap := 0
-            isUWP := false
 
             try {
                 if uwpPath && FileExist(uwpPath) {
@@ -1751,7 +1256,7 @@ class TaskSwitcher {
             if !pBitmap {
                 try {
                     hIcon := 0
-                    DllCall('PrivateExtractIcons', 'Str', 'shell32.dll', 'Int', 0, 'Int', 48, 'Int', 48, 'Ptr*', &hIcon, 'Ptr*', 0, 'UInt', 1, 'UInt', 0)
+                    DllCall('PrivateExtractIcons', 'Str', 'shell32.dll', 'Int', 2, 'Int', 48, 'Int', 48, 'Ptr*', &hIcon, 'Ptr*', 0, 'UInt', 1, 'UInt', 0)
 
                     if hIcon {
                         pBitmap := Gdip_CreateBitmapFromHICON(hIcon)
@@ -1760,7 +1265,7 @@ class TaskSwitcher {
                 }
             }
 
-            this._iconCache[cacheKey] := {bitmap: pBitmap, isUWP: isUWP}
+            return {bitmap: pBitmap, isUWP: isUWP}
         }
     }
 
@@ -1843,7 +1348,7 @@ class TaskSwitcher {
 
         ; clamp target
         maxScrollPixels := this.__GetMaxScrollPixels(
-            this.Menu.windows.Length * this._rowWithDivider - this.rowDividerHeight,
+            this._windowList.Length * this._rowWithDivider - this.rowDividerHeight,
             this._menuHeight - this._topBarHeight)
         this._targetScrollOffset := Max(0, Min(this._targetScrollOffset, maxScrollPixels))
 
@@ -1862,7 +1367,7 @@ class TaskSwitcher {
         switch this._searchText {
         case '':
             ; this._searchText := this.placeholderSearchText
-            ; this.__DrawMenu(() {
+            ; UI.__DrawMenu(() {
             ;     this.__UpdateSearchBar()
             ; })
 
@@ -1870,22 +1375,21 @@ class TaskSwitcher {
             rect := this._searchBarRect
             if x >= rect.x1 && x <= rect.x2 && y >= rect.y1 && y <= rect.y2 {
                 this._searchText := ''
-                this.__DrawMenu(() {
-                    this.__UpdateSearchBar()
+                UI.DrawMenu(() {
+                    UI.__UpdateSearchBar()
                 })
                 return
             }
         }
 
-        if this.__IsOnPartition(x, y) {
+        if this.__IsMouseOnPartition(x, y) {
             this._clicked.item := 'partition'
             return
         }
 
         if this._hoveredPanelTab {
             this._clicked.item := this._hoveredPanelTab
-            this.__DrawMenu(() => this.__DrawPanelTabs())
-            ; this._clicked.index :=
+            UI.DrawMenu(() => this.__DrawPanelTabs())
             return
         }
 
@@ -1898,8 +1402,8 @@ class TaskSwitcher {
         if this._hoveredOver {
             this._clicked.item := 'row'
             this._clicked.index := this._hoveredOver
-            this.__DrawMenu(() {
-                this.__UpdateWindowList()
+            UI.DrawMenu(() {
+                UI.UpdateWindowList()
             })
             return
         }
@@ -1907,8 +1411,8 @@ class TaskSwitcher {
         rect := this._panelIcon.bg
         if x >= rect.x1 && x <= rect.x2 && y >= rect.y1 && y <= rect.y2 {
             this._clicked.item := 'panelIcon'
-            this.__DrawMenu(() {
-                this.__UpdatePanelIcon()
+            UI.DrawMenu(() {
+                UI.UpdatePanelIcon()
             })
             return
         }
@@ -1938,11 +1442,11 @@ class TaskSwitcher {
             case 'panelIcon':
                 rect := this._panelIcon.bg
                 if x >= rect.x1 && x <= rect.x2 && y >= rect.y1 && y <= rect.y2 {
-                    this.TogglePanel()
+                    this.TogglePanelVisibility()
                 }
 
-                this.__DrawMenu(() {
-                    this.__UpdatePanelIcon()
+                UI.DrawMenu(() {
+                    UI.UpdatePanelIcon()
                 })
                 return
 
@@ -1970,8 +1474,8 @@ class TaskSwitcher {
                 }
 
             case 'preview', 'info':
-                if this._showInfoPanel && x >= this._partitionX {
-                    panelRelativeX := x - this._partitionX
+                if this._showPanel && x >= this._partitionPos {
+                    panelRelativeX := x - this._partitionPos
                     panelRelativeY := y - this._topBarHeight
 
                     for rect in this._panelTabRects {
@@ -1981,8 +1485,8 @@ class TaskSwitcher {
                             if item != 'preview' {
                                 this.__CleanupThumbnail()
                             }
-                            this.__DrawMenu(() {
-                                this.__UpdatePanel()
+                            UI.DrawMenu(() {
+                                UI.UpdatePanel()
                             })
                             return
                         }
@@ -1990,7 +1494,7 @@ class TaskSwitcher {
 
                     if this._hoveredPanelTab {
                         this._hoveredPanelTab := ''
-                        this.__DrawMenu(() {
+                        UI.DrawMenu(() {
                             this.__DrawPanelTabs()
                         })
                     }
@@ -2002,8 +1506,8 @@ class TaskSwitcher {
             }
 
             if this.__MouseOverRowOrCloseButton(x, y) {
-                this.__DrawMenu(() {
-                    this.__UpdateWindowList()
+                UI.DrawMenu(() {
+                    UI.UpdateWindowList()
                 })
             }
         }
@@ -2013,8 +1517,8 @@ class TaskSwitcher {
         if this._hoveredOver {
            this._clicked.item := 'row'
            this._clicked.index := this._hoveredOver
-            this.__DrawMenu(() {
-                this.__UpdateWindowList()
+            UI.DrawMenu(() {
+                UI.UpdateWindowList()
             })
         }
     }
@@ -2026,7 +1530,7 @@ class TaskSwitcher {
             index := this._clicked.index
             this._clicked.item := ''
 
-            listWidth := this._showInfoPanel ? this._partitionX : this.menuWidth
+            listWidth := this._showPanel ? this._partitionPos : this.menuWidth
 
             if x > listWidth || y < this._topBarHeight {
                 return
@@ -2043,8 +1547,8 @@ class TaskSwitcher {
             }
 
             if this.__MouseOverRowOrCloseButton(x, y) {
-                this.__DrawMenu(() {
-                    this.__UpdateWindowList()
+                UI.DrawMenu(() {
+                    UI.UpdateWindowList()
                 })
             }
         }
@@ -2062,8 +1566,8 @@ class TaskSwitcher {
             this._hoveredOver := 0
             this._hoveredCloseButton := 0
 
-            this.__DrawMenu(() {
-                this.__UpdateWindowList()
+            UI.DrawMenu(() {
+                UI.UpdateWindowList()
             })
         }
     }
@@ -2072,7 +1576,7 @@ class TaskSwitcher {
         newHover := 0
         newHoveredCloseButton := 0
 
-        listWidth := this._showInfoPanel ? this._partitionX : this.menuWidth
+        listWidth := this._showPanel ? this._partitionPos : this.menuWidth
 
         if x > listWidth || y < this._topBarHeight {
             return
@@ -2106,13 +1610,13 @@ class TaskSwitcher {
         }
     }
 
-    static __IsOnPartition(x, y) {
-        if !this._showInfoPanel || y < this._topBarHeight {
+    static __IsMouseOnPartition(x, y) {
+        if !this._showPanel || y < this._topBarHeight {
             return
         }
 
         partitionGrabWidth := this.partitionWidth + 6    ; adds 3 pixels on each side to make it easier to grab
-        partitionLeft := this._partitionX - partitionGrabWidth / 2
+        partitionLeft := this._partitionPos - partitionGrabWidth / 2
         partitionRight := partitionLeft + partitionGrabWidth
 
         if x >= partitionLeft && x <= partitionRight {
@@ -2121,19 +1625,19 @@ class TaskSwitcher {
     }
 
     static __OnPartitionMove(newSplitX) {
-        if newSplitX < this._listMinWidth {
-            newSplitX := this._listMinWidth
+        if newSplitX < this._minResizableWidth {
+            newSplitX := this._minResizableWidth
         }
 
-        if this.menuWidth - newSplitX < this._infoPanelMinWidth {
-            newSplitX := this.menuWidth - this._infoPanelMinWidth
+        if this.menuWidth - newSplitX < this._minResizableWidth {
+            newSplitX := this.menuWidth - this._minResizableWidth
         }
 
-        if newSplitX != this._partitionX {
-            this._partitionX := newSplitX
-            this.__DrawMenu(() {
-                this.__UpdateWindowList()
-                this.__UpdatePanel()
+        if newSplitX != this._partitionPos {
+            this._partitionPos := newSplitX
+            UI.DrawMenu(() {
+                UI.UpdateWindowList()
+                UI.UpdatePanel()
             })
         }
     }
@@ -2162,13 +1666,13 @@ class TaskSwitcher {
         case 'Escape':
             if this._clicked.item {
                 this.__ResetClickedAndHoveredItems()
-                if this.escapeAlwaysClose {
+                if this.escapePriority {
                     this.CloseMenu()
                 }
                 return
             }
 
-            if this.escapeAlwaysClose || this._searchText = this._placeholderSearchText {
+            if this.escapePriority || this._searchText = this._placeholderSearchText {
                 this.CloseMenu()
                 return
             }
@@ -2198,36 +1702,36 @@ class TaskSwitcher {
                 }
 
                 this.__ApplySearchFilter()
-                this.__WindowListRefreshUI()
+                this.__RedrawWindowList()
             }
 
             return
 
         case 'Home':
             this._lastUsedDevice := 'keyboard'
-            this.SelectFirstRow()
+            this.HighlightFirstRow()
             return
 
         case 'End':
             this._lastUsedDevice := 'keyboard'
-            this.SelectLastRow()
+            this.HighlightLastRow()
             return
 
         case 'Up':
             this._lastUsedDevice := 'keyboard'
-            this.SelectPreviousWindow()
+            this.HighlightPreviousRow()
             return
 
         case 'Down':
             this._lastUsedDevice := 'keyboard'
-            this.SelectNextWindow()
+            this.HighlightNextRow()
             return
 
         case 'Left', 'Right':
-            previewSelected := this._panelTab = 'Preview'
-            this._panelTab := previewSelected ? 'Info' : 'Preview'
+            previewTabActive := this._panelTab = 'Preview'
+            this._panelTab := previewTabActive ? 'Info' : 'Preview'
             this.__CleanupThumbnail()
-            this.__DrawMenu(() => this.__UpdatePanel())
+            UI.DrawMenu(() => UI.UpdatePanel())
             return
 
         case 'Space':
@@ -2241,11 +1745,11 @@ class TaskSwitcher {
             if !this._userIsTyping {
                 temp := this._clicked.item
                 this._clicked.item := 'PanelIcon'
-                this.__DrawMenu(() => this.__UpdatePanelIcon())
-                this.TogglePanel()
+                UI.DrawMenu(() => UI.UpdatePanelIcon())
+                this.TogglePanelVisibility()
                 Sleep(100)
                 this._clicked.item := temp
-                this.__DrawMenu(() => this.__UpdatePanelIcon())
+                UI.DrawMenu(() => UI.UpdatePanelIcon())
             }
             return
 
@@ -2262,7 +1766,7 @@ class TaskSwitcher {
         }
 
         this.__ApplySearchFilter()
-        this.__WindowListRefreshUI()
+        this.__RedrawWindowList()
 
         __GetCharFromVK(vk, sc) {
             ; get keyboard state
@@ -2300,12 +1804,12 @@ class TaskSwitcher {
             SetTimer(this._scrollTimer, 0)
             this._scrollTimerActive := false
         } else {
-            this._scrollOffset += diff * this.scrollSmoothness
+            this._scrollOffset += diff * this.scrollSmoothingValue
         }
 
-        this.__DrawMenu(() {
+        UI.DrawMenu(() {
             this.__UpdateHoverFromMouse()
-            this.__UpdateWindowList()
+            UI.UpdateWindowList()
         })
     }
 
@@ -2320,7 +1824,7 @@ class TaskSwitcher {
         x := NumGet(pt, 0, 'Int')
         y := NumGet(pt, 4, 'Int')
 
-        listWidth := this._showInfoPanel ? this._partitionX : this.menuWidth
+        listWidth := this._showPanel ? this._partitionPos : this.menuWidth
 
         if x > listWidth || y < this._topBarHeight {
             return
@@ -2341,13 +1845,13 @@ class TaskSwitcher {
     }
 
     static __Scroll(amount) {
-        totalContentHeight := this.Menu.windows.Length * this._rowWithDivider
+        totalContentHeight := this._windowList.Length * this._rowWithDivider
         visibleHeight := this._menuHeight - this._topBarHeight
         maxScrollPixels := Max(0, totalContentHeight - visibleHeight)
 
         this._scrollOffset := Max(0, Min(this._scrollOffset + amount, maxScrollPixels))
-        this.__DrawMenu(() {
-            this.__UpdateWindowList()
+        UI.DrawMenu(() {
+            UI.UpdateWindowList()
         })
     }
 
@@ -2356,32 +1860,32 @@ class TaskSwitcher {
             WinActivate(window.hwnd)
             return true
         } catch {
-            this.__RefreshWindows()
+            this.__RefreshWindowList()
             this.__ApplySearchFilter()
-            this.__WindowListRefreshUI()
+            this.__RedrawWindowList()
             return false
         }
     }
 
-    static __KeepSelectedRowVisible() {
+    static __KeepHighlightedRowVisible() {
         visibleHeight := this._menuHeight - this._topBarHeight
 
-        ; scroll if selected row is above visible area
-        selectedRowTop := (this._selectedRow - 1) * this._rowWithDivider
-        if selectedRowTop < this._scrollOffset {
-            this._scrollOffset := ClampOffset(selectedRowTop)
+        ; scroll if highlighted row is above visible area
+        highlightedRowTop := (this._highlightedRow - 1) * this._rowWithDivider
+        if highlightedRowTop < this._scrollOffset {
+            this._scrollOffset := ClampOffset(highlightedRowTop)
             return
         }
 
-        ; scroll if selected row is below visible area
-        selectedRowBottom := selectedRowTop + this.rowHeight
-        if selectedRowBottom > this._scrollOffset + visibleHeight {
-            this._scrollOffset := ClampOffset(selectedRowBottom - visibleHeight)
+        ; scroll if highlighted row is below visible area
+        highlightedRowBottom := highlightedRowTop + this.rowHeight
+        if highlightedRowBottom > this._scrollOffset + visibleHeight {
+            this._scrollOffset := ClampOffset(highlightedRowBottom - visibleHeight)
         }
 
         ClampOffset(offset) {
             maxScrollPixels := this.__GetMaxScrollPixels(
-                this.Menu.windows.Length * this._rowWithDivider,
+                this._windowList.Length * this._rowWithDivider,
                 visibleHeight)
             return Min(offset, maxScrollPixels)
         }
@@ -2517,9 +2021,8 @@ class TaskSwitcher {
      * Modified
      * @returns {Array}
      */
-    static __AltTabWindows(options) {
+    static __GetAltTabWindowList(options) {
         static  WS_EX_TOOLWINDOW := 0x80,
-                GW_OWNER         := 4,
                 GA_ROOTOWNER     := 3,
                 ImmersiveShell,
                 IApplicationViewCollection
@@ -2531,7 +2034,9 @@ class TaskSwitcher {
             IID_IApplicationViewCollection := '{1841C6D7-4F9D-42C0-AF41-8747538F10E5}'
         }
 
-        ImmersiveShell := ComObject(CLSID_ImmersiveShell := '{C2F03A33-21F5-47FA-B4BB-156362A2F239}', IID_IUnknown := '{00000000-0000-0000-C000-000000000046}')
+        CLSID_ImmersiveShell := '{C2F03A33-21F5-47FA-B4BB-156362A2F239}'
+        IID_IUnknown := '{00000000-0000-0000-C000-000000000046}'
+        ImmersiveShell := ComObject(CLSID_ImmersiveShell, IID_IUnknown)
         IApplicationViewCollection := ComObjQuery(ImmersiveShell, IID_IApplicationViewCollection, IID_IApplicationViewCollection)
 
         AltTabList := []
@@ -2559,23 +2064,12 @@ class TaskSwitcher {
             if DllCall('GetLastActivePopup', 'Ptr', owner) = hwnd {
                 ex := WinGetExStyle(hwnd)
 
-                if !DllCall('IsWindowVisible', 'Ptr', hwnd) {
-                    continue
-                }
-
-                if (ex & WS_EX_TOOLWINDOW) {
-                    continue
-                }
-
-                if !IsWindowOnCurrentVirtualDesktop(hwnd) {
-                    continue
-                }
-
-                if !ShouldShowWindowInAltTab(hwnd) {
-                    continue
-                }
-
-                if WindowFilter(hwnd) {
+                ; don't add window to list if any of these conditions are true
+                if !DllCall('IsWindowVisible', 'Ptr', hwnd)
+                || (ex & WS_EX_TOOLWINDOW)
+                || !IsWindowOnCurrentVirtualDesktop(hwnd)
+                || !ShouldShowWindowInAltTab(hwnd)
+                || WindowFilter(hwnd) {
                     continue
                 }
 
@@ -2607,12 +2101,628 @@ class TaskSwitcher {
         }
     }
 
+
     static __CleanupThumbnail() {
         if this._thumbnail {
             DllCall('dwmapi\DwmUnregisterThumbnail', 'Ptr', this._thumbnail)
             this._thumbnail := 0
         }
         this._lastPreviewHwnd := 0
+    }
+
+    static __Cleanup() {
+        this.__CleanupThumbnail()
+        UI.__Cleanup()
+    }
+
+
+    static __New() {
+        this.Menu := Gui('+AlwaysOnTop +ToolWindow -SysMenu -Caption +E0x80000')
+        this.__FrameShadow(this.Menu.hwnd)
+
+        this._OnMouseMove           := ObjBindMethod(this, '__OnMouseMove')
+        this._OnMouseWheel          := ObjBindMethod(this, '__OnMouseWheel')
+        this._OnMouseLeave          := ObjBindMethod(this, '__OnMouseLeave')
+        this._OnLeftClick           := ObjBindMethod(this, '__OnLeftClick')
+        this._OnLeftClickRelease    := ObjBindMethod(this, '__OnLeftClickRelease')
+        this._OnMiddleClick         := ObjBindMethod(this, '__OnMiddleClick')
+        this._OnMiddleClickRelease  := ObjBindMethod(this, '__OnMiddleClickRelease')
+
+        SetupInputHook()
+
+        this._sortedWindows := false
+        this._allWindows := []
+
+        ; dimensions
+        this._x := 0
+        this._y := 0
+        this._menuHeight := 0
+        this._lastWindowListUIWidth := 0
+        this._searchBarHeight := 34
+        this._tabBarHeight := 40
+
+        this._scrollOffset := 0
+        this._targetScrollOffset := 0
+        this._hoveredCloseButton := 0
+        this._hoveredOver := 0
+        this._lastPreviewHwnd := 0
+        this._lastWindowCount := 0
+        this._thumbnail := 0
+        this._mouseLeft := true
+        this._canScroll := false
+        this._scrollTimerActive := false
+        this._lastPressedKey := ''
+        this._showPanel := false
+        this._closeButtonRects := []
+        this._panelTabRects := []
+        this._clicked := {item: '', index: 0}
+        this._onWindowActivate := (*) => 0
+        this._onMenuOpen := (*) => 0
+        this._scrollTimer := ObjBindMethod(this, '__AnimateScroll')
+        this._hoveredPanelTab := ''
+        this._panelTab := 'preview'
+        this._lastUsedDevice := 'keyboard'
+        this._placeholderSearchText := 'Search…'
+
+        this._userIsTyping := false
+        this._tempDisablePanel := false
+        this._private_searchText := ''
+
+        this.DefineProp('_searchText', {
+            Get: (self) => this._private_searchText,
+            Set: (self, value) {
+                this._private_searchText := value
+
+                emptySearchField := this._private_searchText = this._placeholderSearchText || this._private_searchText = ''
+
+                if !emptySearchField {
+                    this._userIsTyping := true
+
+                    if this._showPanel {
+                        this._tempDisablePanel := true
+                        this._showPanel := false
+                    }
+                } else if this._userIsTyping {
+                    this._userIsTyping := false
+
+                    if this._tempDisablePanel {
+                        this._showPanel := true
+                        this._tempDisablePanel := false
+                    }
+                }
+            }
+        })
+
+        ; see OverrideWindowNames() method for more information
+        this.nameOverrides := Map()
+        this.nameOverrides.CaseSense := 'Off'
+
+        SetupInputHook() {
+            this._ih := InputHook('L0 V')
+            this._ih.KeyOpt('{All}', 'N')
+            this._ih.OnKeyDown := ObjBindMethod(this, '__OnKeyPress')
+
+            this._ih.OnKeyUp := (ih, vk, sc) {
+                key := GetKeyName(Format('vk{:x}sc{:x}', vk, sc))
+                if key = this._lastPressedKey {
+                    this._lastPressedKey := ''
+                }
+            }
+        }
+    }
+}
+
+
+class UI extends Gui {
+    static _sections := Map()
+    static _isDrawing := false
+
+    static __New() {
+        this.Menu := this()
+    }
+
+    /**
+     * @param {Func} Updates A function that calls the appropriate update methods
+     * @example
+     * UI.__DrawMenu(() {
+            UI.__UpdatePanelIconUI()
+            UI.__UpdateWindowListUI()
+            UI.__UpdatePanelUI()
+        })
+     */
+    static DrawMenu(UpdateUI) {
+        if this._isDrawing {
+            return
+        }
+
+        this._isDrawing := true
+        UpdateUI()
+        this.UpdateWindow()
+        this._isDrawing := false
+    }
+
+    static __DrawTopBar() {
+        TopBar := this._sections['TopBar'].graphics
+        Gdip_GraphicsClear(TopBar, TaskSwitcher.colors.topBar | 0x01000000)
+    }
+
+    static UpdatePanelIcon() {
+        PanelIcon := this._sections['PanelIcon'].graphics
+        Gdip_GraphicsClear(PanelIcon, TaskSwitcher.colors.topBar)
+
+        ; draw panelIcon background
+        if TaskSwitcher._clicked.item = 'panelIcon' {    ; highlight panel icon
+            highlightColor := TaskSwitcher.__ColorBrightnessAutoAdjust(TaskSwitcher.colors.panelIcon)
+            pBrush := Gdip_BrushCreateSolid(highlightColor)
+        } else {    ; normal draw
+            pBrush := Gdip_BrushCreateSolid(TaskSwitcher.colors.panelIcon)
+        }
+
+        previousSmoothingMode := Gdip_SetSmoothingMode(PanelIcon, 4)
+
+        panelIconR := 6     ; radius
+        background := TaskSwitcher._panelIcon.bg
+        Gdip_FillRoundedRectangle(PanelIcon, pBrush, 0, 0, background.size, background.size, panelIconR)
+        Gdip_DeleteBrush(pBrush)
+
+        line := TaskSwitcher._panelIcon.line
+        panelIconY := line.y
+
+        ; draw panelIcon lines
+        pBrush := Gdip_BrushCreateSolid(TaskSwitcher.colors.panelIconLines)
+        loop 3 {
+            Gdip_FillRoundedRectangle(PanelIcon, pBrush, line.x, panelIconY, line.w, line.h, 2)
+            panelIconY += line.spacing * 2 ; this correctly advances Y by (line height + space height)
+        }
+        Gdip_DeleteBrush(pBrush)
+        Gdip_SetSmoothingMode(PanelIcon, previousSmoothingMode)
+    }
+
+    static __UpdateSearchBar() {
+        SearchBar := this._sections['SearchBar'].graphics
+        Gdip_GraphicsClear(SearchBar, TaskSwitcher.colors.topBar)
+        previousSmoothingMode := Gdip_SetSmoothingMode(SearchBar, 4)
+
+        searchBarRect := TaskSwitcher._searchBarRect
+
+        ; search bar background
+        if TaskSwitcher.colors.topBar != TaskSwitcher.colors.searchBar {
+            pBrush := Gdip_BrushCreateSolid(TaskSwitcher.colors.searchBar)
+            Gdip_FillRoundedRectangle(SearchBar, pBrush, 0, 0, searchBarRect.x2, searchBarRect.h, searchBarRect.r)
+            Gdip_DeleteBrush(pBrush)
+        }
+
+        ; search bar text
+        displayText := SubStr(TaskSwitcher._searchText . Chr(0x200B), 1, 60)
+
+        searchBarOptions := 'x10 y10 s16 '
+        searchBarOptions .= (TaskSwitcher._searchText = TaskSwitcher._placeholderSearchText)
+            ? 'Italic c' TaskSwitcher.textColors.placeholder
+            : 'Bold c' TaskSwitcher.textColors.searchBar
+
+        Gdip_TextToGraphics(searchBar, displayText, searchBarOptions, 'Arial', TaskSwitcher._searchBarRect.x2 - (TaskSwitcher.marginX * 2) - 55, searchBarRect.h)
+        Gdip_SetSmoothingMode(SearchBar, previousSmoothingMode)
+    }
+
+    static UpdateWindowList() {
+        width := TaskSwitcher._showPanel ? TaskSwitcher._partitionPos : TaskSwitcher.menuWidth
+        height := TaskSwitcher.__CalculateTotalHeight()
+
+        if width != TaskSwitcher._lastWindowListUIWidth || height != TaskSwitcher._lastWindowListUIHeight {
+            TaskSwitcher._lastWindowListUIWidth := width
+            TaskSwitcher._lastWindowListUIHeight := height
+            this.__DestroyGDIPSection('WindowList')
+            this.__CreateGDIPSection('WindowList', width, height)
+        }
+
+        WindowList := this._sections['WindowList'].graphics
+        Gdip_GraphicsClear(WindowList)
+        Gdip_SetInterpolationMode(WindowList, 7)
+
+        ; background
+        pBrush := Gdip_BrushCreateSolid(TaskSwitcher.colors.row)
+        Gdip_FillRectangle(WindowList, pBrush, 0, 0, width, height)
+        Gdip_DeleteBrush(pBrush)
+
+        ; pre-loop variable initalizations
+        maxTextWidth := width - TaskSwitcher.iconSize - 15 - 40
+
+        closeButtonSize := TaskSwitcher.closeButtonSize
+        closeButtonX := width - TaskSwitcher.marginX - closeButtonSize - 10
+        closeButtonY := (TaskSwitcher.rowHeight - closeButtonSize) / 2
+        closeButtonOffset := closeButtonSize / 4
+
+        closeButton := {
+            line1: {
+                x: closeButtonX + closeButtonOffset,
+                start: closeButtonX + closeButtonSize - closeButtonOffset,
+            },
+
+            line2: {
+                x: closeButtonX + closeButtonSize - closeButtonOffset,
+                start: closeButtonX + closeButtonOffset
+            },
+        }
+
+        if TaskSwitcher.fullLengthDividers {
+            dividerX := 0
+            dividerWidth := width
+        } else {
+            dividerX := TaskSwitcher.marginX
+            dividerWidth := width - (TaskSwitcher.marginX * 2)
+        }
+
+        sameRow := TaskSwitcher._hoveredOver = TaskSwitcher._highlightedRow
+        useMouse := TaskSwitcher._lastUsedDevice = 'mouse'
+        isClicked := TaskSwitcher._clicked.item = 'row'
+
+        TaskSwitcher._windowRects := []
+        TaskSwitcher._closeButtonRects := []
+
+        for index, window in TaskSwitcher._windowList {
+            rowY := TaskSwitcher._topBarHeight + ((index - 1) * TaskSwitcher._rowWithDivider) - TaskSwitcher._scrollOffset
+
+            if rowY + TaskSwitcher.rowHeight < TaskSwitcher._topBarHeight || rowY > height {
+                continue
+            }
+
+            y1 := Max(rowY, TaskSwitcher._topBarHeight)
+
+            TaskSwitcher._windowRects.Push({
+                x1: 0,
+                y1: Max(rowY, TaskSwitcher._topBarHeight),
+                x2: width,
+                y2: y1 + TaskSwitcher.rowHeight + TaskSwitcher.rowDividerHeight,
+                window: window,
+                actualIndex: index
+            })
+
+            DrawHighlightedRow(index)
+            DrawIcon(window)
+            DrawWindowText(index, window)
+            DrawCloseButton(index)
+            DrawDivider(index)
+        }
+
+        Gdip_SetInterpolationMode(WindowList, 2)
+        return
+
+        /**
+         * supporting functions
+         */
+
+        DrawIcon(window) {
+            iconX := TaskSwitcher.marginX + TaskSwitcher._rowNumberWidth
+            iconY := rowY + (TaskSwitcher.rowHeight - TaskSwitcher.iconSize) / 2
+            TaskSwitcher.__DrawIcon(window, iconX, iconY)
+        }
+
+        DrawWindowText(index, window) {
+            isHovered := TaskSwitcher._hoveredOver = index
+
+            if isHovered && (!sameRow || useMouse) {
+                textColor := isClicked ? TaskSwitcher.textColors.rowClickHighlight : TaskSwitcher.textColors.rowHoverHighlight
+            } else if TaskSwitcher._highlightedRow = index {
+                textColor := TaskSwitcher.textColors.rowHighlight
+            } else {
+                textColor := TaskSwitcher.textColors.row
+            }
+
+            if TaskSwitcher.showRowNumbers && index <= 10 {
+                x := 'x' TaskSwitcher.marginX
+                y := 'y' rowY + (TaskSwitcher.rowHeight - 24) / 2
+
+                Gdip_TextToGraphics(WindowList, SubStr(index, -1), x . ' ' y . ' Bold s24 c' textColor, 'Arial', 20, 20)
+            }
+
+            ; truncate text before rendering instead of letting Gdip scale it
+            truncatedName := TaskSwitcher.__TruncateTextToWidth(window.name, 18, maxTextWidth)
+            truncatedTitle := TaskSwitcher.__TruncateTextToWidth(window.title, 16, maxTextWidth)
+
+            windowOptions := 'x' TaskSwitcher._titleX ' y' (rowY +  8) ' s18 Bold c' textColor
+            titleOptions  := 'x' TaskSwitcher._titleX ' y' (rowY + 28) ' s16 c' textColor
+
+            ; pass a very large width to prevent scaling, since we've already truncated
+            Gdip_TextToGraphics(WindowList, truncatedName, windowOptions, 'Arial', 5000, 20)
+            Gdip_TextToGraphics(WindowList, truncatedTitle, titleOptions, 'Arial', 5000, 20)
+        }
+
+        DrawHighlightedRow(index) {
+            ; switch TaskSwitcher._clicked.item {
+            ; case 'row', 'close':
+            ;     if index = TaskSwitcher._clicked.index {
+            ;         HighlightRow(TaskSwitcher.colors.rowClickHighlight)
+            ;         return
+            ;     }
+            ; }
+
+            clicked := TaskSwitcher._clicked
+            if clicked.item ~= 'row|close' && index = clicked.index {
+                HighlightRow(TaskSwitcher.colors.rowClickHighlight)
+                return
+            }
+
+            if TaskSwitcher._hoveredOver = index {                              ; mouse is hovered over row being checked
+                if !(TaskSwitcher._hoveredOver = TaskSwitcher._highlightedRow)  ; mouse is not hovered over keyboard-highlighted row
+                || TaskSwitcher._lastUsedDevice = 'mouse' {                     ; last used device is the mouse
+                    HighlightRow(TaskSwitcher.colors.rowHoverHighlight)                  ; highlight row as mouse hover color
+                    return
+                }
+            }
+
+            ; triggers if:
+            ; mouse is not hovered over row being checked
+            ; mouse is hovered over keyboard-highlighted row
+            ; last used device is the keyboard
+            if TaskSwitcher._highlightedRow = index {                          ; if keyboard-highlighted row is row being checked
+                HighlightRow(TaskSwitcher.colors.rowHighlight)              ; highlight row as row highlight
+            }
+
+            HighlightRow(color) {
+                if !(color is Array) {
+                    pBrushHover := Gdip_BrushCreateSolid(color)
+                    Gdip_FillRectangle(WindowList, pBrushHover, 0, rowY, width, TaskSwitcher.rowHeight)
+                    Gdip_DeleteBrush(pBrushHover)
+                    return
+                }
+
+                ; create a gradient.
+                previousSmoothingMode := Gdip_SetSmoothingMode(WindowList, 0)
+                colors := color
+                colorCount := colors.Length
+                colorHeight := (TaskSwitcher.rowHeight / colorCount)
+
+                if colorCount = 2 {
+                    color1 := colors[1]
+                    color2 := colors[2]
+
+                    pBrushHover := Gdip_BrushCreateSolid(color1)
+                    Gdip_FillRectangle(WindowList, pBrushHover, 0, rowY, width, colorHeight)
+                    Gdip_DeleteBrush(pBrushHover)
+
+                    pBrushHover := Gdip_CreateLineBrushFromRect(0, rowY + colorHeight, width, colorHeight, color1, color2, 1)
+                    Gdip_FillRectangle(WindowList, pBrushHover, 0, rowY + colorHeight, width, colorHeight)
+                    Gdip_DeleteBrush(pBrushHover)
+
+                } else {
+                    gradientSize := TaskSwitcher.rowHeight / (colorCount - 1)
+
+                    loop colorCount - 1 {
+                        color1 := colors[A_Index]
+                        color2 := colors[A_Index+1]
+
+                        offset := gradientSize * (A_Index - 1)
+                        pBrushHover := Gdip_CreateLineBrushFromRect(0, rowY + offset, width, gradientSize, color1, color2, 1)
+                        Gdip_FillRectangle(WindowList, pBrushHover, 0, rowY + offset, width, gradientSize)
+                        Gdip_DeleteBrush(pBrushHover)
+                    }
+                }
+
+                Gdip_SetSmoothingMode(WindowList, previousSmoothingMode)
+            }
+        }
+
+        DrawCloseButton(index) {
+            ; draw close button (X)
+            if TaskSwitcher._hoveredOver = index || TaskSwitcher.showCloseButtonsOnAllRows {
+                closeButtonY += rowY
+
+                TaskSwitcher._closeButtonRects.Push({
+                    x1: closeButtonX,
+                    y1: closeButtonY,
+                    x2: closeButtonX + closeButtonSize,
+                    y2: closeButtonY + closeButtonSize,
+                    actualIndex: index,
+                })
+
+                ; close background color - highlighted or not
+                isHoveringCloseButton := (TaskSwitcher._hoveredCloseButton = index)
+                if isHoveringCloseButton {
+                    pBrushClose := Gdip_BrushCreateSolid(TaskSwitcher.colors.closeButtonHoverHighlight)
+                    pPen := Gdip_CreatePen(TaskSwitcher.colors.closeButtonXHoverHighlight, 2)
+                } else {
+                    pBrushClose := Gdip_BrushCreateSolid(TaskSwitcher.colors.closeButton)
+                    pPen := Gdip_CreatePen(TaskSwitcher.colors.closeButtonX, 2)
+                }
+
+                previousSmoothingMode := Gdip_SetSmoothingMode(WindowList, 4)
+                Gdip_FillEllipse(WindowList, pBrushClose, closeButtonX, closeButtonY, closeButtonSize, closeButtonSize)
+                Gdip_SetSmoothingMode(WindowList, previousSmoothingMode)
+                Gdip_DeleteBrush(pBrushClose)
+
+                lineEndPoint := closeButtonY + closeButtonSize - closeButtonOffset
+
+                ; line 1
+                Gdip_DrawLine(WindowList, pPen, closeButton.line1.x, closeButtonY + closeButtonOffset, closeButton.line1.start, lineEndPoint)
+
+                ; line 2
+                Gdip_DrawLine(WindowList, pPen, closeButton.line2.x, closeButtonY + closeButtonOffset, closeButton.line2.start, lineEndPoint)
+                Gdip_DeletePen(pPen)
+            }
+        }
+
+        DrawDivider(index) {
+            if index < TaskSwitcher._windowList.Length {
+                dividerY := rowY + TaskSwitcher.rowHeight
+                if dividerY > TaskSwitcher._topBarHeight && dividerY < height {
+                    pBrushDiv := Gdip_BrushCreateSolid(TaskSwitcher.colors.rowDivider)
+                    Gdip_FillRectangle(WindowList, pBrushDiv, dividerX, dividerY, dividerWidth, TaskSwitcher.rowDividerHeight)
+                    Gdip_DeleteBrush(pBrushDiv)
+                }
+            }
+        }
+    }
+
+    static UpdatePanel() {
+        if !TaskSwitcher._showPanel {
+            TaskSwitcher.__CleanupThumbnail()
+            return
+        }
+
+        width := TaskSwitcher.menuWidth - TaskSwitcher._partitionPos
+        height := TaskSwitcher._menuHeight - TaskSwitcher._topBarHeight
+
+        if TaskSwitcher._lastWindowListUIWidth != TaskSwitcher._partitionPos || height != TaskSwitcher._lastWindowListUIHeight {
+            this.__DestroyGDIPSection('Panel')
+            this.__CreateGDIPSection('Panel', width, height)
+        }
+
+        Panel := this._sections['Panel'].graphics
+        Gdip_GraphicsClear(Panel, 0x01000000)
+
+        ; draw panel background
+        pBrushPanel := Gdip_BrushCreateSolid(TaskSwitcher.colors.panel)
+        Gdip_FillRectangle(Panel, pBrushPanel, 0, 0, width, height)
+        Gdip_DeleteBrush(pBrushPanel)
+
+        ; partition
+        partitionWidth := TaskSwitcher.partitionWidth
+        if TaskSwitcher.fullLengthPartition {
+            partitionY := 0
+            partitionHeight := height
+        } else {
+            partitionY := TaskSwitcher.marginY
+            partitionHeight := height - (TaskSwitcher.marginY * 2)
+        }
+
+        pBrushPartition := Gdip_BrushCreateSolid(TaskSwitcher.colors.partition)
+        Gdip_FillRectangle(Panel, pBrushPartition, 0, partitionY, partitionWidth, partitionHeight)  ; draw partition
+        if TaskSwitcher.fullLengthPartition {
+            Gdip_FillRectangle(Panel, pBrushPartition, 0, 0, width, partitionWidth) ; draw top partition
+        }
+        Gdip_DeleteBrush(pBrushPartition)
+
+        this.__DrawPanelTabs(Panel)
+
+        ; draw tab content
+        tabHeight := TaskSwitcher._tabBarHeight
+        useMousedRow := TaskSwitcher.allowMouseToUpdatePanel && TaskSwitcher._lastUsedDevice = 'mouse' && TaskSwitcher._hoveredOver
+        row := useMousedRow ? TaskSwitcher._hoveredOver : TaskSwitcher._highlightedRow
+
+        if TaskSwitcher._windowList.Length = 0 {
+            Panel := this._sections['Panel'].graphics
+            if TaskSwitcher._panelTab = 'preview'  {
+                availableWidth := width - (TaskSwitcher.marginX * 2)
+                availableHeight := height - (TaskSwitcher.marginY * 2)
+
+                x := TaskSwitcher.marginX
+                y := tabHeight + TaskSwitcher.marginY + (availableHeight / 2) - 8
+
+                options := 'x' x ' y' y ' s24 cFFC0C0C0 Center Bold'
+                Gdip_TextToGraphics(Panel, 'No matches', options, 'Arial', availableWidth, availableHeight)
+                TaskSwitcher.__CleanupThumbnail()
+            } else {
+                x := TaskSwitcher.marginX
+                y := tabHeight + TaskSwitcher.marginY
+                Gdip_TextToGraphics(Panel, "No information available", 'x' x ' y' y ' s16 cFFC0C0C0', 'Arial', width - (TaskSwitcher.marginX * 2), 30)
+            }
+            return
+        }
+
+        if row > 0 && row <= TaskSwitcher._windowList.Length {
+            window := TaskSwitcher._windowList[row]
+
+            if TaskSwitcher._panelTab = 'preview' {
+                TaskSwitcher.__UpdatePanelPreview(window, 0, tabHeight, width, height - tabHeight)
+            } else {
+                TaskSwitcher.__UpdatePanelInfo(window, 0, tabHeight, width, height - tabHeight)
+            }
+        }
+    }
+
+    static UpdateWindow() {
+        width := TaskSwitcher.menuWidth
+        height := TaskSwitcher._menuHeight
+
+        if height != TaskSwitcher._lastWindowUIHeight {
+            UI.__DestroyGDIPSection('Window')
+            UI.__CreateGDIPSection('Window', width, height)
+            TaskSwitcher._lastWindowUIHeight := height
+        }
+
+        Window := UI._sections['Window']
+        Gdip_GraphicsClear(Window.graphics, 0x01000000)
+
+        listWidth := TaskSwitcher._showPanel ? TaskSwitcher._partitionPos : width
+        panelIcon := TaskSwitcher._panelIcon.bg
+        searchBar := TaskSwitcher._searchBarRect
+        sections  := UI._sections
+
+        BitBlt(Window.hdc, 0, 0, listWidth, height, sections['WindowList'].hdc, 0, 0)
+        BitBlt(Window.hdc, 0, 0, width, TaskSwitcher._topBarHeight, sections['TopBar'].hdc, 0, 0)
+        BitBlt(Window.hdc, panelIcon.x1, panelIcon.y1, panelIcon.size, panelIcon.size, sections['PanelIcon'].hdc, 0, 0)
+        BitBlt(Window.hdc, searchBar.x1, searchBar.y1, searchBar.x2, searchBar.h, sections['SearchBar'].hdc, 0, 0)
+
+        if TaskSwitcher._showPanel {
+            panelWidth := width - TaskSwitcher._partitionPos
+            panelHeight := height - TaskSwitcher._topBarHeight
+            BitBlt(Window.hdc, TaskSwitcher._partitionPos, TaskSwitcher._topBarHeight, panelWidth, panelHeight, sections['Panel'].hdc, 0, 0)
+        }
+
+        if TaskSwitcher.coordinates = 'Recenter' {
+            MonitorGetWorkArea(TaskSwitcher.monitorToDisplayOn, &left, &top, &right, &bottom)
+            TaskSwitcher._y := top + (bottom - top - height) / 2
+        }
+
+        UpdateLayeredWindow(TaskSwitcher.Menu.Hwnd, Window.hdc, TaskSwitcher._x, TaskSwitcher._y, width, height)
+    }
+
+    static __DrawPanelTabs(Panel := UI._sections['Panel'].graphics) {
+        static tabs := ['Preview', 'Info']
+        TaskSwitcher._panelTabRects := []
+
+        width := TaskSwitcher.menuWidth - TaskSwitcher._partitionPos
+        tabHeight := TaskSwitcher._tabBarHeight
+
+        spacing := TaskSwitcher.marginX
+        partitionSize := TaskSwitcher.partitionWidth * TaskSwitcher.fullLengthPartition
+        halfPartitionSize := TaskSwitcher.partitionWidth / 2
+        y := partitionSize + (TaskSwitcher.marginY * TaskSwitcher.fullLengthPartition)
+
+        ; available space for tabs (minus partition and margins)
+        availableWidth := width - halfPartitionSize - (spacing * 3)     ; left margin, between, right margin
+        tabWidth := availableWidth / tabs.Length
+
+        oldMode := Gdip_SetSmoothingMode(Panel, 4)
+
+        for index, tabName in tabs {
+            offset := index = 1 ? halfPartitionSize : 0
+            x := offset + spacing + ((index - 1) * (tabWidth + spacing))
+
+            bgColor := GetColorAdjustmentValue(index, tabName)
+            pBrush := Gdip_BrushCreateSolid(bgColor)
+
+            Gdip_FillRoundedRectangle(Panel, pBrush, x, y, tabWidth, tabHeight - TaskSwitcher.marginY, 6)
+            Gdip_DeleteBrush(pBrush)
+
+            textColor := TaskSwitcher.textColors.panelTab
+            options := 'x' x ' y' (y + 6) ' s14 Bold c' textColor ' Center'
+            Gdip_TextToGraphics(Panel, tabName, options, 'Arial', tabWidth, tabHeight - (y * 2))
+
+            TaskSwitcher._panelTabRects.Push({
+                x1:  x,
+                y1:  y,
+                x2:  x + tabWidth,
+                y2:  y + (tabHeight - TaskSwitcher.marginY),
+                tab: tabName
+            })
+        }
+
+        Gdip_SetSmoothingMode(Panel, oldMode)
+
+        GetColorAdjustmentValue(index, tabName) {
+            colors := TaskSwitcher.colors
+
+            if TaskSwitcher._clicked.item = tabName {                                       ; tab is clicked
+                return colors.panelTabClickHighlight
+            } else if TaskSwitcher._hoveredPanelTab = (index = 1 ? 'preview' : 'info') {    ; tab is hovered
+                return colors.panelTabHoverHighlight
+            } else if TaskSwitcher._panelTab = (index = 1 ? 'preview' : 'info') {           ; tab is active
+                return colors.panelTabActive
+            } else {
+                return colors.panelTabInactive
+            }
+        }
     }
 
     static __CreateGDIPSection(sectionKey, w, h) {
@@ -2642,122 +2752,32 @@ class TaskSwitcher {
         this._sections.Delete(sectionKey)
     }
 
-    static __GDIP_Cleanup() {
+    static __Cleanup() {
         for section in this._sections {
             this.__DestroyGDIPSection(section)
         }
+    }
+}
 
-        if this._iconCache.Count > 50 {
-            this.__CleanupIcons()
-        }
+/**
+ * @plankoe @swagfag
+ * @source https://old.reddit.com/r/AutoHotkey/comments/11dnz2l/enumerating_via_for_key_value_in_var_out_of/jaaknw6/
+ */
+class OrderedMap extends Map {
+    __New(KVPairs*) {
+        super.__New(KVPairs*)
+        KeyArray := []
+        keyCount := KVPairs.Length // 2
+        KeyArray.Length := keyCount
+        Loop keyCount
+            KeyArray[A_Index] := KVPairs[(A_Index << 1) - 1]
+        this.KeyArray := KeyArray
     }
 
-    static __Cleanup() {
-        this.__GDIP_Cleanup()
-        this.__CleanupIcons()
-    }
-
-    static __CleanupIcons() {
-        ; cleanup cached icons - extract bitmap from object
-        for key, iconData in this._iconCache {
-            if iconData && IsObject(iconData) && iconData.HasProp('bitmap') && iconData.bitmap {
-                Gdip_DisposeImage(iconData.bitmap)
-            } else if iconData && !IsObject(iconData) {
-                ; handle old cached items that are just pointers
-                Gdip_DisposeImage(iconData)
-            }
-        }
-    }
-
-    static __New() {
-        this.Menu := Gui('+AlwaysOnTop +ToolWindow -SysMenu -Caption +E0x80000')
-        this.__FrameShadow(this.Menu.hwnd)
-
-        this._OnMouseMove           := ObjBindMethod(this, '__OnMouseMove')
-        this._OnMouseWheel          := ObjBindMethod(this, '__OnMouseWheel')
-        this._OnMouseLeave          := ObjBindMethod(this, '__OnMouseLeave')
-        this._OnLeftClick           := ObjBindMethod(this, '__OnLeftClick')
-        this._OnLeftClickRelease    := ObjBindMethod(this, '__OnLeftClickRelease')
-        this._OnMiddleClick         := ObjBindMethod(this, '__OnMiddleClick')
-        this._OnMiddleClickRelease  := ObjBindMethod(this, '__OnMiddleClickRelease')
-
-        this._ih := InputHook('L0 V')
-        this._ih.KeyOpt('{All}', 'N')
-        this._ih.OnKeyDown := ObjBindMethod(this, '__OnKeyPress')
-        this._ih.OnKeyUp := (ih, vk, sc) {
-            key := GetKeyName(Format('vk{:x}sc{:x}', vk, sc))
-            if key = this._lastPressedKey {
-                this._lastPressedKey := ''
-            }
-        }
-
-        this._sections := Map()
-        this._iconCache := Map()
-        this._sortedWindows := false
-
-        ; dimensions
-        this._x := 0
-        this._y := 0
-        this._menuHeight := 0
-        this._lastWindowListWidth := 0
-        this._searchBarHeight := 34
-        this._tabBarHeight := 40
-
-        this._scrollOffset := 0
-        this._targetScrollOffset := 0
-        this._hoveredCloseButton := 0
-        this._hoveredOver := 0
-        this._lastPreviewHwnd := 0
-        this._lastWindowCount := 0
-        this._thumbnail := 0
-        this._mouseLeft := true
-        this._isDrawing := false
-        this._canScroll := false
-        this._scrollTimerActive := false
-        this._lastPressedKey := ''
-        this._showInfoPanel := false
-        this._closeButtonRects := []
-        this._panelTabRects := []
-        this._clicked := {item: '', index: 0}
-        this._onWindowActivate := (*) => 0
-        this._onMenuOpen := (*) => 0
-        this._scrollTimer := ObjBindMethod(this, '__AnimateScroll')
-        this._hoveredPanelTab := ''
-        this._panelTab := 'preview'
-        this._lastUsedDevice := 'keyboard'
-        this._placeholderSearchText := 'Search…'
-
-        this._userIsTyping := false
-        this._tempDisablePanel := false
-        this._private_searchText := ''
-
-        this.DefineProp('_searchText', {
-            Get: (self) => this._private_searchText,
-            Set: (self, value) {
-                this._private_searchText := value
-
-                emptySearchField := this._private_searchText = this._placeholderSearchText || this._private_searchText = ''
-
-                if !emptySearchField {
-                    this._userIsTyping := true
-
-                    if this._showInfoPanel {
-                        this._tempDisablePanel := true
-                        this._showInfoPanel := false
-                    }
-                } else if this._userIsTyping {
-                    this._userIsTyping := false
-
-                    if this._tempDisablePanel {
-                        this._showInfoPanel := true
-                        this._tempDisablePanel := false
-                    }
-                }
-            }
-        })
-
-        ; see OverrideWindowNames() method for more information
-        this.nameOverrides := Map()
-        this.nameOverrides.CaseSense := 'Off'
+    __Enum(*) {
+        keyEnum := this.KeyArray.__Enum(1)
+        return (&key?, &val?) => (
+            keyEnum(&key) ? (val := this[key], true) : false
+        )
     }
 }

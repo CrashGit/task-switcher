@@ -331,10 +331,7 @@ export class TaskSwitcher {
         }
     }
 
-    /**
-     * TODO: name change
-     */
-    static __UpdateUIWhenHighlightedRowChanges() {
+    static __BufferUIUpdateOnNavigation() {
         /**
          * I have hotkeys that send {Up} and {Down} multiple times to make navigation easier.
          * This code is an attempt to minimize issues that came with quickly-repeated navigation events.

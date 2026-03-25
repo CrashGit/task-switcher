@@ -301,7 +301,7 @@ export class TaskSwitcher {
             return  ; returns if no changes were made
         }
 
-        this.__UpdateUIWhenHighlightedRowChanges()
+        this.__BufferUIUpdateOnNavigation()
     }
 
     static HighlightNextRow() {
@@ -313,13 +313,13 @@ export class TaskSwitcher {
             return  ; returns if no changes were made
         }
 
-        this.__UpdateUIWhenHighlightedRowChanges()
+        this.__BufferUIUpdateOnNavigation()
     }
 
     static HighlightFirstRow() {
         if this._highlightedRow != 1 {
             this._highlightedRow := 1
-            this.__UpdateUIWhenHighlightedRowChanges()
+            this.__BufferUIUpdateOnNavigation()
         }
     }
 
@@ -327,7 +327,7 @@ export class TaskSwitcher {
         last := this._windowList.Length
         if this._highlightedRow != last {
             this._highlightedRow := last
-            this.__UpdateUIWhenHighlightedRowChanges()
+            this.__BufferUIUpdateOnNavigation()
         }
     }
 
@@ -603,7 +603,10 @@ export class TaskSwitcher {
                 x2: x1 + this.menuWidth - (2 * height + (this.marginX * 2)),
                 y2: y1 + height,
                 h: height,
-                r: 8
+                r: 8,
+                ContainsPoint: (self, x, y) {
+                    return x >= self.x1 && x <= self.x2 && y >= self.y1 && y <= self.y2
+                }
             }
         }
 
@@ -621,7 +624,10 @@ export class TaskSwitcher {
                     y1: panelIconBackgroundY,
                     x2: panelIconBackgroundX + panelIconBackgroundSize,
                     y2: panelIconBackgroundY + panelIconBackgroundSize,
-                    size: panelIconBackgroundSize
+                    size: panelIconBackgroundSize,
+                    ContainsPoint: (self, x, y) {
+                        return x >= self.x1 && x <= self.x2 && y >= self.y1 && y <= self.y2
+                    }
                 },
 
                 ; panel icon lines
@@ -750,20 +756,24 @@ export class TaskSwitcher {
 
     static __OnMouseMove(wParam, lParam, msg, hwnd) {
         static tme := TrackMouseLeave(hwnd)
+        static lastX := -1, lastY := -1
+
+        this.__GetMouseCoordsFromStruct(lParam, &x, &y)
+        if x = lastX && y = lastY {
+            return
+        }
+
+        lastX := x, lastY := y
 
         if this._mouseLeft {
             this._mouseLeft := false
             DllCall('user32.dll\TrackMouseEvent', 'Ptr', tme)
         }
 
-        x := lParam & 0xFFFF
-        y := lParam >> 16
-
         if this._clicked.item = 'partition' {
             this.__OnPartitionMove(x)
-            DllCall('SetCursor', 'Ptr', DllCall('LoadCursor', 'Ptr', 0, 'Ptr', 32646))
             return
-        } else if this.__IsMouseOnPartition(x, y) {
+        } else if this.__PointIsOnPartition(x, y) {
             DllCall('SetCursor', 'Ptr', DllCall('LoadCursor', 'Ptr', 0, 'Ptr', 32646))
             return
         }
@@ -776,8 +786,7 @@ export class TaskSwitcher {
             return
         }
 
-        windowList := this._showPanel ? this._partitionPos : this.menuWidth
-        mouseOverWindowList := y > this._topBarHeight && x < windowList
+        mouseOverWindowList := this.__PointIsOnWindowList(x, y)
         this._canScroll := mouseOverWindowList
 
         if mouseOverWindowList {
@@ -807,13 +816,12 @@ export class TaskSwitcher {
 
         oldHoveredTab := this._hoveredPanelTab
 
-        if this._showPanel && x >= this._partitionPos && y >= this._topBarHeight {
+        if this._showPanel && this.__PointIsOnPanel(x, y) {
             panelRelativeX := x - this._partitionPos
             panelRelativeY := y - this._topBarHeight
 
             for rect in this._panelTabRects {
-                if panelRelativeX >= rect.x1 && panelRelativeX <= rect.x2
-                    && panelRelativeY >= rect.y1 && panelRelativeY <= rect.y2 {
+                if rect.ContainsPoint(panelRelativeX, panelRelativeY) {
                     this._hoveredPanelTab := rect.tab
                     hoveredTab := true
                     break
@@ -824,6 +832,7 @@ export class TaskSwitcher {
         if !IsSet(hoveredTab) {
             this._hoveredPanelTab := ''
         }
+
         if oldHoveredTab != this._hoveredPanelTab {
             UI.DrawMenu(() => UI.UpdatePanel())
         }
@@ -1117,10 +1126,10 @@ export class TaskSwitcher {
             return
         }
 
-        this._windowList := this.__PerformSearch()
+        this._windowList := this.__GetSearchResults()
     }
 
-    static __PerformSearch() {
+    static __GetSearchResults() {
         matches := []
         for win in this._allWindows {
             if InStr(win.name, this._searchText) || InStr(win.title, this._searchText) {
@@ -1367,8 +1376,7 @@ export class TaskSwitcher {
 
     static __OnLeftClick(wParam, lParam, msg, hwnd) {
         DllCall('SetCapture', 'Ptr', this.Menu.Hwnd)
-        x := lParam & 0xFFFF
-        y := lParam >> 16
+        this.__GetMouseCoordsFromStruct(lParam, &x, &y)
 
         switch this._searchText {
         case '':
@@ -1379,7 +1387,7 @@ export class TaskSwitcher {
 
         case this._placeholderSearchText:
             rect := this._searchBarRect
-            if x >= rect.x1 && x <= rect.x2 && y >= rect.y1 && y <= rect.y2 {
+            if rect.ContainsPoint(x, y) {
                 this._searchText := ''
                 UI.DrawMenu(() {
                     UI.UpdateSearchBar()
@@ -1388,14 +1396,14 @@ export class TaskSwitcher {
             }
         }
 
-        if this.__IsMouseOnPartition(x, y) {
+        if this.__PointIsOnPartition(x, y) {
             this._clicked.item := 'partition'
             return
         }
 
         if this._hoveredPanelTab {
             this._clicked.item := this._hoveredPanelTab
-            UI.DrawMenu(() => this.__DrawPanelTabs())
+            UI.DrawMenu(() => UI.DrawPanelTabs())
             return
         }
 
@@ -1415,7 +1423,7 @@ export class TaskSwitcher {
         }
 
         rect := this._panelIcon.bg
-        if x >= rect.x1 && x <= rect.x2 && y >= rect.y1 && y <= rect.y2 {
+        if rect.ContainsPoint(x, y) {
             this._clicked.item := 'panelIcon'
             UI.DrawMenu(() {
                 UI.UpdatePanelIcon()
@@ -1436,8 +1444,7 @@ export class TaskSwitcher {
             }
 
             this._clicked.item := ''
-            x := lParam & 0xFFFF
-            y := lParam >> 16
+            this.__GetMouseCoordsFromStruct(lParam, &x, &y)
 
             index := this._clicked.index
 
@@ -1447,7 +1454,7 @@ export class TaskSwitcher {
 
             case 'panelIcon':
                 rect := this._panelIcon.bg
-                if x >= rect.x1 && x <= rect.x2 && y >= rect.y1 && y <= rect.y2 {
+                if rect.ContainsPoint(x, y) {
                     this.TogglePanelVisibility()
                 }
 
@@ -1459,7 +1466,7 @@ export class TaskSwitcher {
             case 'close':
                 for rect in this._closeButtonRects {
                     if rect.actualIndex = index {
-                        if x >= rect.x1 && x <= rect.x2 && y >= rect.y1 && y <= rect.y2 {
+                        if rect.ContainsPoint(x, y) {
                             this.__CloseWindow(index)
                             return
                         }
@@ -1470,7 +1477,7 @@ export class TaskSwitcher {
             case 'row':
                 for rect in this._windowRects {
                     if rect.actualIndex = index {
-                        if x >= rect.x1 && x <= rect.x2 && y >= rect.y1 && y <= rect.y2 {
+                        if rect.ContainsPoint(x, y) {
                             this.CloseMenu()
                             this.__ActivateWindow(rect.window)
                             return
@@ -1485,8 +1492,7 @@ export class TaskSwitcher {
                     panelRelativeY := y - this._topBarHeight
 
                     for rect in this._panelTabRects {
-                        if panelRelativeX >= rect.x1 && panelRelativeX <= rect.x2
-                            && panelRelativeY >= rect.y1 && panelRelativeY <= rect.y2 {
+                        if rect.ContainsPoint(panelRelativeX, panelRelativeY) {
                             this._panelTab := rect.tab
                             if item != 'preview' {
                                 this.__CleanupThumbnail()
@@ -1501,7 +1507,7 @@ export class TaskSwitcher {
                     if this._hoveredPanelTab {
                         this._hoveredPanelTab := ''
                         UI.DrawMenu(() {
-                            this.__DrawPanelTabs()
+                            UI.DrawPanelTabs()
                         })
                     }
                     return
@@ -1530,33 +1536,30 @@ export class TaskSwitcher {
     }
 
     static __OnMiddleClickRelease(wParam, lParam, msg, hwnd) {
-        if this._clicked.item = 'row' {
-            x := lParam & 0xFFFF
-            y := lParam >> 16
-            index := this._clicked.index
-            this._clicked.item := ''
+        if this._clicked.item != 'row' {
+            return
+        }
 
-            listWidth := this._showPanel ? this._partitionPos : this.menuWidth
+        index := this._clicked.index
+        this._clicked.item := ''
 
-            if x > listWidth || y < this._topBarHeight {
-                return
-            }
+        this.__GetMouseCoordsFromStruct(lParam, &x, &y)
 
+        if this.__PointIsOnWindowList(x, y) {
             for rect in this._windowRects {
                 if rect.actualIndex = index {
                     if y >= rect.y1 && y <= rect.y2 {
                         this.__CloseWindow(index)
-                        return
                     }
                     break
                 }
             }
+        }
 
-            if this.__UpdateMouseHoverState(x, y) {
-                UI.DrawMenu(() {
-                    UI.UpdateWindowList()
-                })
-            }
+        if this.__UpdateMouseHoverState(x, y) {
+            UI.DrawMenu(() {
+                UI.UpdateWindowList()
+            })
         }
     }
 
@@ -1580,21 +1583,21 @@ export class TaskSwitcher {
 
     ; returns true if successful
     static __UpdateMouseHoverState(x, y) {
+        if !this.__PointIsOnWindowList(x, y) {
+            this._hoveredOver := 0
+            this._hoveredCloseButton := 0
+            return true
+        }
+
         newHover := 0
         newHoveredCloseButton := 0
 
-        listWidth := this._showPanel ? this._partitionPos : this.menuWidth
-
-        if x > listWidth || y < this._topBarHeight {
-            return
-        }
-
         ; check if hovering over a close button
         for rect in this._closeButtonRects {
-            if x >= rect.x1 && x <= rect.x2 && y >= rect.y1 && y <= rect.y2 {
+            if rect.ContainsPoint(x, y) {
                 newHoveredCloseButton := rect.actualIndex
                 ; if the mouse is over any close button, ensure the corresponding
-                ; row is marked as hovered (used when not drawing every close button)
+                ; row is marked as hovered (useful when not drawing every close button)
                 newHover := newHoveredCloseButton
                 break
             }
@@ -1610,6 +1613,7 @@ export class TaskSwitcher {
             }
         }
 
+        ; if hovered row or close button is different
         if newHover != this._hoveredOver || newHoveredCloseButton != this._hoveredCloseButton {
             this._hoveredOver := newHover
             this._hoveredCloseButton := newHoveredCloseButton
@@ -1617,7 +1621,7 @@ export class TaskSwitcher {
         }
     }
 
-    static __IsMouseOnPartition(x, y) {
+    static __PointIsOnPartition(x, y) {
         if !this._showPanel || y < this._topBarHeight {
             return
         }
@@ -1632,6 +1636,8 @@ export class TaskSwitcher {
     }
 
     static __OnPartitionMove(newSplitX) {
+        DllCall('SetCursor', 'Ptr', DllCall('LoadCursor', 'Ptr', 0, 'Ptr', 32646))
+
         if newSplitX < this._minResizableWidth {
             newSplitX := this._minResizableWidth
         }
@@ -1816,8 +1822,8 @@ export class TaskSwitcher {
 
 
         UI.DrawMenu(() {
-            hoverChanged := this.__GetMouseClientCoords(&x, &y)
-            this.__UpdateMouseHoverState(x, y)
+            this.__GetMouseClientCoords(&x, &y)
+            hoverChanged := this.__UpdateMouseHoverState(x, y)
             UI.UpdateWindowList()
             if hoverChanged {
                 UI.UpdatePanel()
@@ -2094,6 +2100,19 @@ export class TaskSwitcher {
         }
     }
 
+    static __GetMouseCoordsFromStruct(lParam, &x, &y) {
+        x := lParam & 0xFFFF
+        y := lParam >> 16
+    }
+
+    static __PointIsOnPanel(x, y) {
+        return x > this._partitionPos && y > this._topBarHeight
+    }
+
+    static __PointIsOnWindowList(x, y) {
+        windowListWidth := this._showPanel ? this._partitionPos : this.menuWidth
+        return x < windowListWidth && y > this._topBarHeight
+    }
 
     static __CleanupThumbnail() {
         if this._thumbnail {
@@ -2107,7 +2126,6 @@ export class TaskSwitcher {
         this.__CleanupThumbnail()
         UI.__Cleanup()
     }
-
 
     static __New() {
         this.Menu := Gui('+AlwaysOnTop +ToolWindow -SysMenu -Caption +E0x80000')
@@ -2147,6 +2165,7 @@ export class TaskSwitcher {
         this._scrollTimerActive := false
         this._lastPressedKey := ''
         this._showPanel := false
+        this._windowRects := []
         this._closeButtonRects := []
         this._panelTabRects := []
         this._clicked := {item: '', index: 0}
@@ -2367,7 +2386,10 @@ class UI extends Gui {
                 x2: width,
                 y2: y1 + TaskSwitcher.rowHeight + TaskSwitcher.rowDividerHeight,
                 window: window,
-                actualIndex: index
+                actualIndex: index,
+                ContainsPoint: (self, x, y) {
+                    return x >= self.x1 && x <= self.x2 && y >= self.y1 && y <= self.y2
+                }
             })
 
             DrawHighlightedRow(index)
@@ -2498,6 +2520,9 @@ class UI extends Gui {
                     x2: closeButtonX + closeButtonSize,
                     y2: closeButtonY + closeButtonSize,
                     actualIndex: index,
+                    ContainsPoint: (self, x, y) {
+                        return x >= self.x1 && x <= self.x2 && y >= self.y1 && y <= self.y2
+                    }
                 })
 
                 ; close background color - highlighted or not
@@ -2689,7 +2714,10 @@ class UI extends Gui {
                 y1:  y,
                 x2:  x + tabWidth,
                 y2:  y + (tabHeight - TaskSwitcher.marginY),
-                tab: tabName
+                tab: tabName,
+                ContainsPoint: (self, x, y) {
+                    return x >= self.x1 && x <= self.x2 && y >= self.y1 && y <= self.y2
+                }
             })
         }
 

@@ -107,23 +107,21 @@ export class TaskSwitcher {
            scrollPixelOffset                := 40,
            monitorToDisplayOn               := MonitorGetPrimary(), ; any valid number that represents a monitor you have (can use MonitorGetCount() to find out the the max)
 
-
            ; behavior
            scrollSmoothingValue             := 0.35,                ; higher values make it feel snappier and less smooth
-           wrapRowNavigaion                 := true,                ; whether keyboard navigation wraps back to the beginning/end of the list
-           alwaysHighlightFirstRow          := true,                ; applies to filtering windows when typing
+           wrapRowNavigation                := true,
+           alwaysHighlightFirstRow          := true,
            showCloseButtonsOnAllRows        := false,
            escapePriority                   := false,
            rememberPanelState               := false,
            fullLengthDividers               := false,
            fullLengthPartition              := true,
            allowResize                      := false,
-           closeOnOutsideClick              := true,                ; closes the menu if you click with any mouse button outside the menu
+           closeOnOutsideClick              := true,
            clickPassthrough                 := true,
            showRowNumbers                   := true,
            allowMouseToUpdatePanel          := true,                ; whether mousing over a row will update the panel or if the panel should require keyboard navigation to update
-           showPanelDuringFiltering         := false,               ; true may result in a(n) funky/incomplete display if allowResize is true
-
+           showPanelDuringFiltering         := false,               ; true may result in a(n) funky/incomplete display if allowResize = true
 
 
         /**
@@ -214,7 +212,6 @@ export class TaskSwitcher {
             this._showPanel := this.rememberPanelState
         }
         Critical('Off')
-        ; this.__CleanupIcons()
     }
 
     static ActivateWindowAndCloseMenu(highlightedRow := this._highlightedRow) {
@@ -551,8 +548,8 @@ export class TaskSwitcher {
         VariousPropertiesSetup() {
             if this.showPanelDuringFiltering {
                 this.DefineProp('_searchText', {
-                    Get: (self) => this._private_searchText,
-                    Set: (self, value) => this._private_searchText := value
+                    Get: (self) => self._private_searchText,
+                    Set: (self, value) => self._private_searchText := value
                 })
             }
 
@@ -562,6 +559,19 @@ export class TaskSwitcher {
             this._rowNumberWidth := this.showRowNumbers ? 30 : 0
             this._titleX         := (this.iconSize + (2 * this.marginX)) + this._rowNumberWidth
             this._rowWithDivider := this.rowHeight + this.rowDividerHeight
+
+            ; thought I might need this for something—currently un-useful
+            ; this._private_highlightedRow := 1
+            ; this._previousHighlightedRow := 1
+            ; this.DefineProp('_highlightedRow', {
+            ;     Get: (self) => self._private_highlightedRow,
+            ;     Set: (self, value) {
+            ;         if self._private_highlightedRow != value {
+            ;             self._previousHighlightedRow := self._private_highlightedRow
+            ;             self._private_highlightedRow := value
+            ;         }
+            ;     }
+            ; })
 
             if this.allowResize {
                 this.__RefreshWindowList()
@@ -574,11 +584,8 @@ export class TaskSwitcher {
 
             minWidthInPixels := this.menuWidth * 0.2
             maxWidthInPixels := this.menuWidth * 0.8
-
             this._minResizableWidth := minWidthInPixels
 
-            ; upperBounds      := this.menuWidth * (1 - this.defaultPanelSizePercent)
-            ; this._partitionPos := Min(upperBounds, this.menuWidth - minWidthInPixels) ; initialize to a valid position
             partitionPos := this.menuWidth * (1 - this.defaultPanelSizePercent)
             this._partitionPos := Max(minWidthInPixels, Min(maxWidthInPixels, partitionPos))
 
@@ -639,15 +646,10 @@ export class TaskSwitcher {
 
 
     static __FirstDraw() {
-        static _ := () {
-            this.HasOwnProp('Call') && this()
-            return unset
-        }() ?? unset
-
         this.__CalculateTotalHeight()      ; necessary for certain this._highlightedRow starting values when this.__ScrollTohighlightedRow() is called
         this.__KeepHighlightedRowVisible()
         UI.DrawMenu(() {
-            UI.__UpdateSearchBar()
+            UI.UpdateSearchBar()
             UI.UpdatePanelIcon()
             UI.UpdateWindowList()
             UI.UpdatePanel()
@@ -667,6 +669,11 @@ export class TaskSwitcher {
     }
 
     static __OpenMenu(options := {}, sortedWindows := false) {
+        static _ := () {
+            this.HasOwnProp('Call') && this()
+            return unset
+        }() ?? unset
+
         Critical(50)
         this._sortedWindows := sortedWindows
         OnMessage(0x200, this._OnMouseMove)
@@ -681,7 +688,6 @@ export class TaskSwitcher {
 
         this.__RefreshWindowList(options)
         this._highlightedRow := Min(Max(1, startingIndex), this._windowList.Length)
-
         this.__FirstDraw()
         this.Menu.Show('w' this.menuWidth ' h' this._menuHeight)
         this._ih.Start()
@@ -773,12 +779,15 @@ export class TaskSwitcher {
             return
         }
 
-        this._canScroll := (y > this._topBarHeight) && x < (this._showPanel ? this._partitionPos : this.menuWidth)
-        if (y > this._topBarHeight) && x < (this._showPanel ? this._partitionPos : this.menuWidth) {
+        windowList := this._showPanel ? this._partitionPos : this.menuWidth
+        mouseOverWindowList := y > this._topBarHeight && x < windowList
+        this._canScroll := mouseOverWindowList
+
+        if mouseOverWindowList {
             this._hoveredPanelTab := ''
             this._canScroll := true
 
-            if this.__MouseOverRowOrCloseButton(x, y) {
+            if this.__UpdateMouseHoverState(x, y) {
                 this._lastUsedDevice := 'mouse'
                 UI.DrawMenu(() {
                     UI.UpdateWindowList()
@@ -1039,7 +1048,7 @@ export class TaskSwitcher {
         width := this.menuWidth
         height := this._topBarHeight
         UI.__CreateGDIPSection('TopBar', width, height)
-        UI.__DrawTopBar()
+        UI.DrawTopBar()
     }
 
     static __InitSearchBar() {
@@ -1068,7 +1077,7 @@ export class TaskSwitcher {
     }
 
     ; parameter only exists for the reason of closing a window, so the nᵗʰ highlighted window is still highlighted
-    static __RedrawWindowList(overridehighlightedRow := false) {
+    static __RedrawWindowList(overrideHighlightedRow := false) {
         totalRows := this._windowList.Length
 
         ; reset scroll if list was empty and now has results
@@ -1080,7 +1089,7 @@ export class TaskSwitcher {
         this._lastWindowCount := totalRows
 
         ; validate the highlighted row
-        if this.alwaysHighlightFirstRow && !overridehighlightedRow {
+        if this.alwaysHighlightFirstRow && !overrideHighlightedRow {
             this._highlightedRow := 1
         } else {
             totalRows := this._windowList.Length
@@ -1098,7 +1107,7 @@ export class TaskSwitcher {
         }
 
         UI.DrawMenu(() {
-            UI.__UpdateSearchBar()
+            UI.UpdateSearchBar()
             UI.UpdateWindowList()
             this.__KeepHighlightedRowVisible()
             UI.UpdatePanel()
@@ -1376,7 +1385,7 @@ export class TaskSwitcher {
             if x >= rect.x1 && x <= rect.x2 && y >= rect.y1 && y <= rect.y2 {
                 this._searchText := ''
                 UI.DrawMenu(() {
-                    UI.__UpdateSearchBar()
+                    UI.UpdateSearchBar()
                 })
                 return
             }
@@ -1505,7 +1514,7 @@ export class TaskSwitcher {
                 return
             }
 
-            if this.__MouseOverRowOrCloseButton(x, y) {
+            if this.__UpdateMouseHoverState(x, y) {
                 UI.DrawMenu(() {
                     UI.UpdateWindowList()
                 })
@@ -1546,7 +1555,7 @@ export class TaskSwitcher {
                 }
             }
 
-            if this.__MouseOverRowOrCloseButton(x, y) {
+            if this.__UpdateMouseHoverState(x, y) {
                 UI.DrawMenu(() {
                     UI.UpdateWindowList()
                 })
@@ -1572,7 +1581,8 @@ export class TaskSwitcher {
         }
     }
 
-    static __MouseOverRowOrCloseButton(x, y) {
+    ; returns true if successful
+    static __UpdateMouseHoverState(x, y) {
         newHover := 0
         newHoveredCloseButton := 0
 
@@ -1807,13 +1817,18 @@ export class TaskSwitcher {
             this._scrollOffset += diff * this.scrollSmoothingValue
         }
 
+
         UI.DrawMenu(() {
-            this.__UpdateHoverFromMouse()
+            hoverChanged := this.__GetMouseClientCoords(&x, &y)
+            this.__UpdateMouseHoverState(x, y)
             UI.UpdateWindowList()
+            if hoverChanged {
+                UI.UpdatePanel()
+            }
         })
     }
 
-    static __UpdateHoverFromMouse() {
+    static __GetMouseClientCoords(&x, &y) {
         MouseGetPos(&mouseX, &mouseY)
 
         ; convert screen to client coordinates
@@ -1823,25 +1838,6 @@ export class TaskSwitcher {
 
         x := NumGet(pt, 0, 'Int')
         y := NumGet(pt, 4, 'Int')
-
-        listWidth := this._showPanel ? this._partitionPos : this.menuWidth
-
-        if x > listWidth || y < this._topBarHeight {
-            return
-        }
-
-        ; check which row the mouse is over
-        newHover := 0
-        for rect in this._windowRects {
-            if y >= rect.y1 && y <= rect.y2 {
-                newHover := rect.actualIndex
-                break
-            }
-        }
-
-        if newHover != this._hoveredOver {
-            this._hoveredOver := newHover
-        }
     }
 
     static __Scroll(amount) {
@@ -2127,6 +2123,7 @@ export class TaskSwitcher {
         this._OnLeftClickRelease    := ObjBindMethod(this, '__OnLeftClickRelease')
         this._OnMiddleClick         := ObjBindMethod(this, '__OnMiddleClick')
         this._OnMiddleClickRelease  := ObjBindMethod(this, '__OnMiddleClickRelease')
+        this._scrollTimer           := ObjBindMethod(this, '__AnimateScroll')
 
         SetupInputHook()
 
@@ -2158,7 +2155,6 @@ export class TaskSwitcher {
         this._clicked := {item: '', index: 0}
         this._onWindowActivate := (*) => 0
         this._onMenuOpen := (*) => 0
-        this._scrollTimer := ObjBindMethod(this, '__AnimateScroll')
         this._hoveredPanelTab := ''
         this._panelTab := 'preview'
         this._lastUsedDevice := 'keyboard'
@@ -2224,10 +2220,10 @@ class UI extends Gui {
     /**
      * @param {Func} Updates A function that calls the appropriate update methods
      * @example
-     * UI.__DrawMenu(() {
-            UI.__UpdatePanelIconUI()
-            UI.__UpdateWindowListUI()
-            UI.__UpdatePanelUI()
+     * UI.DrawMenu(() {
+            UI.UpdatePanelIconUI()
+            UI.UpdateWindowListUI()
+            UI.UpdatePanelUI()
         })
      */
     static DrawMenu(UpdateUI) {
@@ -2241,7 +2237,7 @@ class UI extends Gui {
         this._isDrawing := false
     }
 
-    static __DrawTopBar() {
+    static DrawTopBar() {
         TopBar := this._sections['TopBar'].graphics
         Gdip_GraphicsClear(TopBar, TaskSwitcher.colors.topBar | 0x01000000)
     }
@@ -2278,7 +2274,7 @@ class UI extends Gui {
         Gdip_SetSmoothingMode(PanelIcon, previousSmoothingMode)
     }
 
-    static __UpdateSearchBar() {
+    static UpdateSearchBar() {
         SearchBar := this._sections['SearchBar'].graphics
         Gdip_GraphicsClear(SearchBar, TaskSwitcher.colors.topBar)
         previousSmoothingMode := Gdip_SetSmoothingMode(SearchBar, 4)
@@ -2428,14 +2424,6 @@ class UI extends Gui {
         }
 
         DrawHighlightedRow(index) {
-            ; switch TaskSwitcher._clicked.item {
-            ; case 'row', 'close':
-            ;     if index = TaskSwitcher._clicked.index {
-            ;         HighlightRow(TaskSwitcher.colors.rowClickHighlight)
-            ;         return
-            ;     }
-            ; }
-
             clicked := TaskSwitcher._clicked
             if clicked.item ~= 'row|close' && index = clicked.index {
                 HighlightRow(TaskSwitcher.colors.rowClickHighlight)
@@ -2592,7 +2580,7 @@ class UI extends Gui {
         }
         Gdip_DeleteBrush(pBrushPartition)
 
-        this.__DrawPanelTabs(Panel)
+        this.DrawPanelTabs(Panel)
 
         ; draw tab content
         tabHeight := TaskSwitcher._tabBarHeight
@@ -2667,7 +2655,7 @@ class UI extends Gui {
         UpdateLayeredWindow(TaskSwitcher.Menu.Hwnd, Window.hdc, TaskSwitcher._x, TaskSwitcher._y, width, height)
     }
 
-    static __DrawPanelTabs(Panel := UI._sections['Panel'].graphics) {
+    static DrawPanelTabs(Panel := UI._sections['Panel'].graphics) {
         static tabs := ['Preview', 'Info']
         TaskSwitcher._panelTabRects := []
 

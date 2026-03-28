@@ -1408,7 +1408,7 @@ export class TaskSwitcher {
 
         if this._searchBarRect.ContainsPoint(x, y) {
             if this._searchText = this._placeholderSearchText {
-                this._searchText := '|'
+                this._searchText := ''
                 UI.DrawMenu(() => UI.UpdateSearchBar())
             }
             return
@@ -2335,12 +2335,15 @@ class UI {
         ; search bar text
         displayText := SubStr(TaskSwitcher._searchText . Chr(0x200B), 1, 60)
 
+        Gdip_SetSmoothingMode(SearchBar, previousSmoothingMode)
+        displayText := SubStr(TaskSwitcher._searchText . Chr(0x200B), 1, 60)
+
         searchBarOptions := 'x10 y10 s16 '
         searchBarOptions .= (TaskSwitcher._searchText = TaskSwitcher._placeholderSearchText)
             ? 'Italic c' TaskSwitcher.textColors.placeholder
             : 'Bold c'   TaskSwitcher.textColors.searchBar
 
-        Gdip_TextToGraphics(searchBar, displayText, searchBarOptions, 'Arial', TaskSwitcher._searchBarRect.w, searchBarRect.h)
+        Gdip_TextToGraphics(searchBar, displayText, searchBarOptions, 'Arial', searchBarRect.w, searchBarRect.h)
         Gdip_SetSmoothingMode(SearchBar, previousSmoothingMode)
     }
 
@@ -2451,7 +2454,7 @@ class UI {
                 textColor := TaskSwitcher.textColors.row
             }
 
-            if TaskSwitcher.showRowNumbers && index <= 10 {
+            if index <= 10 && TaskSwitcher.showRowNumbers {
                 x := 'x' TaskSwitcher.marginX
                 y := 'y' rowY + (TaskSwitcher.rowHeight - 24) / 2
 
@@ -2459,7 +2462,7 @@ class UI {
             }
 
             ; truncate text before rendering instead of letting Gdip scale it
-            truncatedName := TaskSwitcher.__TruncateTextToWidth(window.name, 18, maxTextWidth)
+            truncatedName  := TaskSwitcher.__TruncateTextToWidth(window.name,  18, maxTextWidth)
             truncatedTitle := TaskSwitcher.__TruncateTextToWidth(window.title, 16, maxTextWidth)
 
             windowOptions := 'x' TaskSwitcher._titleX ' y' (rowY +  8) ' s18 Bold c' textColor

@@ -138,9 +138,9 @@ export class TaskSwitcher {
     ; @END_OF_OPTIONS --------------------------------
 
 
-    static isActive => WinActive('ahk_id' this.Menu.Hwnd)
-    static isOpen => (DetectHiddenWindows(false), WinExist('ahk_id' this.Menu.Hwnd))
-    static IsUnderMouse => (MouseGetPos(,, &win), win = TaskSwitcher.Menu.Hwnd)
+    static isActive => WinActive('ahk_id' UI.Menu.Hwnd)
+    static isOpen => (DetectHiddenWindows(false), WinExist('ahk_id' UI.Menu.Hwnd))
+    static IsUnderMouse => (MouseGetPos(,, &win), win = UI.Menu.Hwnd)
 
     static ToggleMenuSorted(options?) {
         if this.isOpen {
@@ -185,7 +185,7 @@ export class TaskSwitcher {
         DllCall('ReleaseCapture')
 
         this._ih.Stop()
-        this.Menu.Hide()
+        UI.Menu.Hide()
 
         OnMessage(0x200, this._OnMouseMove, 0)
         OnMessage(0x20A, this._OnMouseWheel, 0)
@@ -194,6 +194,7 @@ export class TaskSwitcher {
         OnMessage(0x202, this._OnLeftClickRelease, 0)
         OnMessage(0x207, this._OnMiddleClick, 0)
         OnMessage(0x208, this._OnMiddleClickRelease, 0)
+        OnMessage(0x020, this._OnSetCursor)
 
         this._lastUsedDevice := 'keyboard'
         this._lastPreviewHwnd := 0
@@ -272,7 +273,7 @@ export class TaskSwitcher {
                 TaskSwitcher.ActivateWindowAndCloseMenu()
             } else if TaskSwitcher.isOpen {
                 TaskSwitcher.CloseMenu()
-            } else if this.isOpen && WinWaitActive(this.Menu.Hwnd,, 2) {   ; in the process of opening
+            } else if this.isOpen && WinWaitActive(UI.Menu.Hwnd,, 2) {   ; in the process of opening
                 if altTabHotkeysEnabled {
                     this.CloseMenu()
                 }
@@ -594,14 +595,16 @@ export class TaskSwitcher {
 
         SearchBarDimensions() {
             height := this._searchBarHeight
+            width  := this.menuWidth - (2 * height + (this.marginX * 2))
             x1 := this.marginX
-            y1 := this._topBarHeight - this.marginY - height
+            y1 := this.marginY
 
             this._searchBarRect := {
                 x1: x1,
                 y1: y1,
-                x2: x1 + this.menuWidth - (2 * height + (this.marginX * 2)),
+                x2: x1 + width,
                 y2: y1 + height,
+                w: width,
                 h: height,
                 r: 8,
                 ContainsPoint: (self, x, y) {
@@ -686,15 +689,16 @@ export class TaskSwitcher {
         OnMessage(0x202, this._OnLeftClickRelease)
         OnMessage(0x207, this._OnMiddleClick)
         OnMessage(0x208, this._OnMiddleClickRelease)
-
-        startingIndex := options.index ?? 1
+        OnMessage(0x020, this._OnSetCursor)
 
         this.__RefreshWindowList(options)
+        startingIndex := options.index ?? 1
         this._highlightedRow := Min(Max(1, startingIndex), this._windowList.Length)
+
         this.__FirstDraw()
-        this.Menu.Show('w' this.menuWidth ' h' this._menuHeight)
+        UI.Menu.Show('w' this.menuWidth ' h' this._menuHeight)
         this._ih.Start()
-        this._onMenuOpen(this.Menu)
+        this._onMenuOpen(UI.Menu)
         Critical('Off')
     }
 
@@ -754,99 +758,13 @@ export class TaskSwitcher {
         return this._menuHeight := totalHeight
     }
 
-    static __OnMouseMove(wParam, lParam, msg, hwnd) {
-        static tme := TrackMouseLeave(hwnd)
-        static lastX := -1, lastY := -1
+    static __OnSetCursor(wParam, lParam, msg, hwnd) {
+        return true
+    }
 
-        this.__GetMouseCoordsFromStruct(lParam, &x, &y)
-        if x = lastX && y = lastY {
-            return
-        }
-
-        lastX := x, lastY := y
-
-        if this._mouseLeft {
-            this._mouseLeft := false
-            DllCall('user32.dll\TrackMouseEvent', 'Ptr', tme)
-        }
-
-        if this._clicked.item = 'partition' {
-            this.__OnPartitionMove(x)
-            return
-        } else if this.__PointIsOnPartition(x, y) {
-            DllCall('SetCursor', 'Ptr', DllCall('LoadCursor', 'Ptr', 0, 'Ptr', 32646))
-            return
-        }
-
-        if UI._isDrawing {
-            return
-        }
-
-        if this._clicked.item {
-            return
-        }
-
-        mouseOverWindowList := this.__PointIsOnWindowList(x, y)
-        this._canScroll := mouseOverWindowList
-
-        if mouseOverWindowList {
-            this._hoveredPanelTab := ''
-            this._canScroll := true
-
-            if this.__UpdateMouseHoverState(x, y) {
-                this._lastUsedDevice := 'mouse'
-                UI.DrawMenu(() {
-                    UI.UpdateWindowList()
-                    if this.allowMouseToUpdatePanel {
-                        UI.UpdatePanel()
-                    }
-                })
-            }
-            return
-        }
-
-        this._canScroll := false
-        this._hoveredCloseButton := 0
-        if this._hoveredOver {
-            this._hoveredOver := 0
-            UI.DrawMenu(() {
-                UI.UpdateWindowList()
-            })
-        }
-
-        oldHoveredTab := this._hoveredPanelTab
-
-        if this._showPanel && this.__PointIsOnPanel(x, y) {
-            panelRelativeX := x - this._partitionPos
-            panelRelativeY := y - this._topBarHeight
-
-            for rect in this._panelTabRects {
-                if rect.ContainsPoint(panelRelativeX, panelRelativeY) {
-                    this._hoveredPanelTab := rect.tab
-                    hoveredTab := true
-                    break
-                }
-            }
-        }
-
-        if !IsSet(hoveredTab) {
-            this._hoveredPanelTab := ''
-        }
-
-        if oldHoveredTab != this._hoveredPanelTab {
-            UI.DrawMenu(() => UI.UpdatePanel())
-        }
-
-        TrackMouseLeave(hwnd) {
-            TME_LEAVE := 0x00000002
-            size := A_PtrSize = 8 ? 24 : 16     ; TRACKMOUSEEVENT struct size
-
-            tme := Buffer(size, 0)
-            NumPut('UInt', size,        tme, 0) ; cbSize
-            NumPut('UInt', TME_LEAVE,   tme, 4) ; dwFlags
-            NumPut('Ptr',  hwnd,        tme, 8) ; hwndTrack
-            NumPut('UInt', 0,           tme, A_PtrSize = 8 ? 16 : 12)
-            return tme
+    static __SetCursor(cursor) {
+        if cursor != this._prevCursor {
+            DllCall('SetCursor', 'Ptr', cursor)
         }
     }
 
@@ -867,7 +785,7 @@ export class TaskSwitcher {
         ; if window is minimized, the live preview is shortened but enlarged version of the toolbar which is not what we want
         if WinGetMinMax(window.hwnd) = -1 {
             Panel := UI._sections['Panel'].graphics
-            availableWidth := panelWidth - (this.marginX * 2)
+            availableWidth  := panelWidth  - (this.marginX * 2)
             availableHeight := panelHeight - (this.marginY * 2)
 
             x := panelX + this.marginX
@@ -887,7 +805,7 @@ export class TaskSwitcher {
             thumbnail := 0
             try {
                 result := DllCall('dwmapi\DwmRegisterThumbnail',
-                    'Ptr', this.Menu.Hwnd,
+                    'Ptr', UI.Menu.Hwnd,
                     'Ptr', window.hwnd,
                     'Ptr*', &thumbnail)
             } catch {
@@ -907,12 +825,12 @@ export class TaskSwitcher {
         }
 
         margin := this.marginX
-        maxWidth := panelWidth - (margin * 2)
+        maxWidth  := panelWidth  - (margin * 2)
         maxHeight := panelHeight - (margin * 2)
 
         sourceAspect := winW / winH
 
-        destWidth := Min(maxWidth, Round(maxHeight * sourceAspect))
+        destWidth  := Min(maxWidth,  Round(maxHeight * sourceAspect))
         destHeight := Min(maxHeight, Round(destWidth / sourceAspect))
 
         destX := this._partitionPos + margin + (maxWidth - destWidth) / 2
@@ -1051,15 +969,15 @@ export class TaskSwitcher {
     }
 
     static __InitTopBar() {
-        width := this.menuWidth
+        width  := this.menuWidth
         height := this._topBarHeight
         UI.__CreateGDIPSection('TopBar', width, height)
         UI.DrawTopBar()
     }
 
     static __InitSearchBar() {
+        width  := this._searchBarRect.w
         height := this._searchBarRect.h
-        width := this._searchBarRect.x2
         UI.__CreateGDIPSection('SearchBar', width, height)
     }
 
@@ -1286,20 +1204,20 @@ export class TaskSwitcher {
 
     static __GetLargestUWPLogoPath(hwnd) {
         Address := CallbackCreate(EnumChildProc.Bind(WinGetPID(hwnd)), 'Fast', 2)
-        DllCall('User32.dll\EnumChildWindows', 'Ptr', hwnd, 'Ptr', Address, 'UInt*', &ChildPID := 0, 'Int')
+        DllCall('User32.dll\EnumChildWindows', 'Ptr', hwnd, 'Ptr', Address, 'UInt*', &childPID := 0, 'Int')
         CallbackFree(Address)
 
         ; if no child PID, use the main window's PID
-        if !ChildPID {
-            ChildPID := WinGetPID(hwnd)
+        if !childPID {
+            childPID := WinGetPID(hwnd)
         }
 
-        if !AppHasPackage(ChildPID) {
+        if !AppHasPackage(childPID) {
             return
         }
 
         try {
-            processPath := ProcessGetPath(ChildPID)
+            processPath := ProcessGetPath(childPID)
             defaultLogoPath := GetDefaultLogoPath(processPath)
             largestPath := GetLargestLogoPath(defaultLogoPath)
             return largestPath
@@ -1308,39 +1226,149 @@ export class TaskSwitcher {
         }
 
         EnumChildProc(PID, hwnd, lParam) {
-            ChildPID := WinGetPID(hwnd)
-            if ChildPID != PID {
-                NumPut('UInt', ChildPID, lParam)
+            childPID := WinGetPID(hwnd)
+            if childPID != PID {
+                NumPut('UInt', childPID, lParam)
                 return false
             }
             return true
         }
 
-        AppHasPackage(ChildPID) {
+        AppHasPackage(childPID) {
             static PROCESS_QUERY_LIMITED_INFORMATION := 0x1000, APPMODEL_ERROR_NO_PACKAGE := 15700
-            ProcessHandle := DllCall('Kernel32.dll\OpenProcess', 'UInt', PROCESS_QUERY_LIMITED_INFORMATION, 'Int', false, 'UInt', ChildPID, 'Ptr')
-            IsUWP := DllCall('Kernel32.dll\GetPackageId', 'Ptr', ProcessHandle, 'UInt*', &BufferLength := 0, 'Ptr', 0, 'Int') != APPMODEL_ERROR_NO_PACKAGE
-            DllCall('Kernel32.dll\CloseHandle', 'Ptr', ProcessHandle, 'Int')
-            return IsUWP
+            processHandle := DllCall('Kernel32.dll\OpenProcess', 'UInt', PROCESS_QUERY_LIMITED_INFORMATION, 'Int', false, 'UInt', childPID, 'Ptr')
+            isUWP := DllCall('Kernel32.dll\GetPackageId', 'Ptr', processHandle, 'UInt*', &BufferLength := 0, 'Ptr', 0, 'Int') != APPMODEL_ERROR_NO_PACKAGE
+            DllCall('Kernel32.dll\CloseHandle', 'Ptr', processHandle, 'Int')
+            return isUWP
         }
 
-        GetDefaultLogoPath(Path) {
-            SplitPath Path, , &Dir
-            if !RegExMatch(FileRead(Dir '\AppxManifest.xml', 'UTF-8'), '<Logo>(.*)</Logo>', &Match) {
-                throw Error('Unable to read logo information from file.', -1, Dir '\AppxManifest.xml')
+        GetDefaultLogoPath(path) {
+            SplitPath(path, , &dir)
+            if !RegExMatch(FileRead(dir '\AppxManifest.xml', 'UTF-8'), '<Logo>(.*)</Logo>', &match) {
+                throw Error('Unable to read logo information from file.', -1, dir '\AppxManifest.xml')
             }
-            return Dir '\' Match[1]
+            return dir '\' match[1]
         }
 
-        GetLargestLogoPath(Path) {
-            LoopFileSize := 0
-            SplitPath Path, , &Dir, &Extension, &NameNoExt
-            Loop Files Dir '\' NameNoExt '.scale-*.' Extension {
-                if A_LoopFileSize > LoopFileSize && RegExMatch(A_LoopFileName, '\d+\.' Extension '$') {
-                    LoopFilePath := A_LoopFilePath, LoopFileSize := A_LoopFileSize
+        GetLargestLogoPath(path) {
+            loopFileSize := 0
+            loopFilePath := ''
+            SplitPath(path, , &dir, &extension, &nameNoExt)
+
+            loop files dir '\' nameNoExt '.scale-*.' extension {
+                if A_LoopFileSize > loopFileSize && RegExMatch(A_LoopFileName, '\d+\.' extension '$') {
+                    loopFilePath := A_LoopFilePath
+                    loopFileSize := A_LoopFileSize
                 }
             }
-            return LoopFilePath ?? ''
+            return loopFilePath
+        }
+    }
+
+    static __OnMouseMove(wParam, lParam, msg, hwnd) {
+        static tme := TrackMouseLeave(hwnd)
+        static lastX := -1, lastY := -1
+
+        ; why does this get called infinitely?
+        ; ToolTip('time: ' A_TickCount)
+
+        this.__GetMouseCoordsFromStruct(lParam, &x, &y)
+
+        if x = lastX && y = lastY {
+            return
+        }
+
+        lastX := x, lastY := y
+
+        if this._mouseLeft {
+            this._mouseLeft := false
+            DllCall('user32.dll\TrackMouseEvent', 'Ptr', tme)
+        }
+
+        if this._clicked.item = 'partition' {
+            this.__OnPartitionMove(x)
+            return
+        }
+
+        if this._searchBarRect.ContainsPoint(x, y) {
+           this.__SetCursor(this._cursors.textSelect)
+           return
+        } else if this.__PointIsOnPartition(x, y) {
+           this.__SetCursor(this._cursors.horizontalResize)
+           return
+        } else {
+           this.__SetCursor(this._cursors.default)
+        }
+
+        if UI._isDrawing {
+            return
+        }
+
+        if this._clicked.item {
+            return
+        }
+
+        mouseOverWindowList := this.__PointIsOnWindowList(x, y)
+        this._canScroll := mouseOverWindowList
+
+        if mouseOverWindowList {
+            this._hoveredPanelTab := ''
+            this._canScroll := true
+
+            if this.__UpdateMouseHoverState(x, y) {
+                this._lastUsedDevice := 'mouse'
+                UI.DrawMenu(() {
+                    UI.UpdateWindowList()
+                    if this.allowMouseToUpdatePanel {
+                        UI.UpdatePanel()
+                    }
+                })
+            }
+            return
+        }
+
+        this._canScroll := false
+        this._hoveredCloseButton := 0
+        if this._hoveredOver {
+            this._hoveredOver := 0
+            UI.DrawMenu(() {
+                UI.UpdateWindowList()
+            })
+        }
+
+        oldHoveredTab := this._hoveredPanelTab
+
+        if this._showPanel && this.__PointIsOnPanel(x, y) {
+            panelRelativeX := x - this._partitionPos
+            panelRelativeY := y - this._topBarHeight
+
+            for rect in this._panelTabRects {
+                if rect.ContainsPoint(panelRelativeX, panelRelativeY) {
+                    this._hoveredPanelTab := rect.tab
+                    hoveredTab := true
+                    break
+                }
+            }
+        }
+
+        if !IsSet(hoveredTab) {
+            this._hoveredPanelTab := ''
+        }
+
+        if oldHoveredTab != this._hoveredPanelTab {
+            UI.DrawMenu(() => UI.UpdatePanel())
+        }
+
+        TrackMouseLeave(hwnd) {
+            TME_LEAVE := 0x00000002
+            size := A_PtrSize = 8 ? 24 : 16     ; TRACKMOUSEEVENT struct size
+
+            tme := Buffer(size, 0)
+            NumPut('UInt', size,        tme, 0) ; cbSize
+            NumPut('UInt', TME_LEAVE,   tme, 4) ; dwFlags
+            NumPut('Ptr',  hwnd,        tme, 8) ; hwndTrack
+            NumPut('UInt', 0,           tme, A_PtrSize = 8 ? 16 : 12)
+            return tme
         }
     }
 
@@ -1375,25 +1403,20 @@ export class TaskSwitcher {
     }
 
     static __OnLeftClick(wParam, lParam, msg, hwnd) {
-        DllCall('SetCapture', 'Ptr', this.Menu.Hwnd)
+        DllCall('SetCapture', 'Ptr', UI.Menu.Hwnd)
         this.__GetMouseCoordsFromStruct(lParam, &x, &y)
 
-        switch this._searchText {
-        case '':
-            ; this._searchText := this.placeholderSearchText
-            ; UI.__DrawMenu(() {
-            ;     this.__UpdateSearchBar()
-            ; })
-
-        case this._placeholderSearchText:
-            rect := this._searchBarRect
-            if rect.ContainsPoint(x, y) {
-                this._searchText := ''
-                UI.DrawMenu(() {
-                    UI.UpdateSearchBar()
-                })
-                return
+        if this._searchBarRect.ContainsPoint(x, y) {
+            if this._searchText = this._placeholderSearchText {
+                this._searchText := '|'
+                UI.DrawMenu(() => UI.UpdateSearchBar())
             }
+            return
+        }
+
+        if this._searchText = '' {
+            this._searchText := this._placeholderSearchText
+            UI.DrawMenu(() => UI.UpdateSearchBar())
         }
 
         if this.__PointIsOnPartition(x, y) {
@@ -1570,8 +1593,7 @@ export class TaskSwitcher {
     static __ResetClickedAndHoveredItems(*) {
         this._mouseLeft := true
 
-        hovered := this._hoveredOver || this._hoveredCloseButton
-        if hovered {
+        if this._hoveredOver || this._hoveredCloseButton {
             this._hoveredOver := 0
             this._hoveredCloseButton := 0
 
@@ -1636,8 +1658,6 @@ export class TaskSwitcher {
     }
 
     static __OnPartitionMove(newSplitX) {
-        DllCall('SetCursor', 'Ptr', DllCall('LoadCursor', 'Ptr', 0, 'Ptr', 32646))
-
         if newSplitX < this._minResizableWidth {
             newSplitX := this._minResizableWidth
         }
@@ -1685,12 +1705,13 @@ export class TaskSwitcher {
                 return
             }
 
-            if this.escapePriority || this._searchText = this._placeholderSearchText {
+            if this.escapePriority || UnfilteredSearch() {
                 this.CloseMenu()
                 return
             }
 
             this._searchText := this._placeholderSearchText
+            UnfilteredSearch() => (this._searchText ~= '^$|' this._placeholderSearchText)
 
         case 'Enter':
             this.ActivateWindowAndCloseMenu()
@@ -1837,7 +1858,7 @@ export class TaskSwitcher {
         ; convert screen to client coordinates
         pt := Buffer(8)
         NumPut('Int', mouseX, 'Int', mouseY, pt, 0)
-        DllCall('ScreenToClient', 'Ptr', this.Menu.Hwnd, 'Ptr', pt)
+        DllCall('ScreenToClient', 'Ptr', UI.Menu.Hwnd, 'Ptr', pt)
 
         x := NumGet(pt, 0, 'Int')
         y := NumGet(pt, 4, 'Int')
@@ -1976,7 +1997,7 @@ export class TaskSwitcher {
 
         ; measure full text and extract width
         result := Gdip_MeasureString(tempGraphics, text, pFont, hFormat, &RectF)
-        width := StrSplit(result, '|')[3]
+        width  := StrSplit(result, '|')[3]
 
         if width <= maxPixelWidth {
             Cleanup()
@@ -1989,9 +2010,9 @@ export class TaskSwitcher {
         best := 1
 
         while low <= high {
-            mid := (low + high) // 2
-            testText := SubStr(text, 1, mid) . '…'
-            result := Gdip_MeasureString(tempGraphics, testText, pFont, hFormat, &RectF)
+            mid       := (low + high) // 2
+            testText  := SubStr(text, 1, mid) . '…'
+            result    := Gdip_MeasureString(tempGraphics, testText, pFont, hFormat, &RectF)
             testWidth := StrSplit(result, '|')[3]
 
             if testWidth <= maxPixelWidth {
@@ -2128,8 +2149,7 @@ export class TaskSwitcher {
     }
 
     static __New() {
-        this.Menu := Gui('+AlwaysOnTop +ToolWindow -SysMenu -Caption +E0x80000')
-        this.__FrameShadow(this.Menu.hwnd)
+        this.__FrameShadow(UI.Menu.hwnd)
 
         this._OnMouseMove           := ObjBindMethod(this, '__OnMouseMove')
         this._OnMouseWheel          := ObjBindMethod(this, '__OnMouseWheel')
@@ -2139,8 +2159,16 @@ export class TaskSwitcher {
         this._OnMiddleClick         := ObjBindMethod(this, '__OnMiddleClick')
         this._OnMiddleClickRelease  := ObjBindMethod(this, '__OnMiddleClickRelease')
         this._scrollTimer           := ObjBindMethod(this, '__AnimateScroll')
+        this._OnSetCursor           := ObjBindMethod(this, '__OnSetCursor')
 
         SetupInputHook()
+
+        this._cursors := {
+            default: DllCall('LoadCursor', 'Ptr', 0, 'Ptr', 32512),
+            textSelect: DllCall('LoadCursor', 'Ptr', 0, 'Ptr', 32513),
+            horizontalResize: DllCall('LoadCursor', 'Ptr', 0, 'Ptr', 32644),
+        }
+        this._prevCursor := 0
 
         this._sortedWindows := false
         this._allWindows := []
@@ -2225,12 +2253,12 @@ export class TaskSwitcher {
 }
 
 
-class UI extends Gui {
+class UI {
     static _sections := Map()
     static _isDrawing := false
 
     static __New() {
-        this.Menu := this()
+        this.Menu := Gui('+AlwaysOnTop +ToolWindow -SysMenu -Caption +E0x80000')
     }
 
     /**
@@ -2300,7 +2328,7 @@ class UI extends Gui {
         ; search bar background
         if TaskSwitcher.colors.topBar != TaskSwitcher.colors.searchBar {
             pBrush := Gdip_BrushCreateSolid(TaskSwitcher.colors.searchBar)
-            Gdip_FillRoundedRectangle(SearchBar, pBrush, 0, 0, searchBarRect.x2, searchBarRect.h, searchBarRect.r)
+            Gdip_FillRoundedRectangle(SearchBar, pBrush, 0, 0, searchBarRect.w, searchBarRect.h, searchBarRect.r)
             Gdip_DeleteBrush(pBrush)
         }
 
@@ -2310,18 +2338,18 @@ class UI extends Gui {
         searchBarOptions := 'x10 y10 s16 '
         searchBarOptions .= (TaskSwitcher._searchText = TaskSwitcher._placeholderSearchText)
             ? 'Italic c' TaskSwitcher.textColors.placeholder
-            : 'Bold c' TaskSwitcher.textColors.searchBar
+            : 'Bold c'   TaskSwitcher.textColors.searchBar
 
-        Gdip_TextToGraphics(searchBar, displayText, searchBarOptions, 'Arial', TaskSwitcher._searchBarRect.x2 - (TaskSwitcher.marginX * 2) - 55, searchBarRect.h)
+        Gdip_TextToGraphics(searchBar, displayText, searchBarOptions, 'Arial', TaskSwitcher._searchBarRect.w, searchBarRect.h)
         Gdip_SetSmoothingMode(SearchBar, previousSmoothingMode)
     }
 
     static UpdateWindowList() {
-        width := TaskSwitcher._showPanel ? TaskSwitcher._partitionPos : TaskSwitcher.menuWidth
+        width  := TaskSwitcher._showPanel ? TaskSwitcher._partitionPos : TaskSwitcher.menuWidth
         height := TaskSwitcher.__CalculateTotalHeight()
 
         if width != TaskSwitcher._lastWindowListUIWidth || height != TaskSwitcher._lastWindowListUIHeight {
-            TaskSwitcher._lastWindowListUIWidth := width
+            TaskSwitcher._lastWindowListUIWidth  := width
             TaskSwitcher._lastWindowListUIHeight := height
             this.__DestroyGDIPSection('WindowList')
             this.__CreateGDIPSection('WindowList', width, height)
@@ -2339,9 +2367,9 @@ class UI extends Gui {
         ; pre-loop variable initalizations
         maxTextWidth := width - TaskSwitcher.iconSize - 15 - 40
 
-        closeButtonSize := TaskSwitcher.closeButtonSize
-        closeButtonX := width - TaskSwitcher.marginX - closeButtonSize - 10
-        closeButtonY := (TaskSwitcher.rowHeight - closeButtonSize) / 2
+        closeButtonSize   := TaskSwitcher.closeButtonSize
+        closeButtonX      := width - TaskSwitcher.marginX - closeButtonSize - 10
+        closeButtonY      := (TaskSwitcher.rowHeight - closeButtonSize) / 2
         closeButtonOffset := closeButtonSize / 4
 
         closeButton := {
@@ -2364,8 +2392,8 @@ class UI extends Gui {
             dividerWidth := width - (TaskSwitcher.marginX * 2)
         }
 
-        sameRow := TaskSwitcher._hoveredOver = TaskSwitcher._highlightedRow
-        useMouse := TaskSwitcher._lastUsedDevice = 'mouse'
+        sameRow   := TaskSwitcher._hoveredOver = TaskSwitcher._highlightedRow
+        usedMouse := TaskSwitcher._lastUsedDevice = 'mouse'
         isClicked := TaskSwitcher._clicked.item = 'row'
 
         TaskSwitcher._windowRects := []
@@ -2415,7 +2443,7 @@ class UI extends Gui {
         DrawWindowText(index, window) {
             isHovered := TaskSwitcher._hoveredOver = index
 
-            if isHovered && (!sameRow || useMouse) {
+            if isHovered && (!sameRow || usedMouse) {
                 textColor := isClicked ? TaskSwitcher.textColors.rowClickHighlight : TaskSwitcher.textColors.rowHoverHighlight
             } else if TaskSwitcher._highlightedRow = index {
                 textColor := TaskSwitcher.textColors.rowHighlight
@@ -2452,7 +2480,7 @@ class UI extends Gui {
             if TaskSwitcher._hoveredOver = index {                              ; mouse is hovered over row being checked
                 if !(TaskSwitcher._hoveredOver = TaskSwitcher._highlightedRow)  ; mouse is not hovered over keyboard-highlighted row
                 || TaskSwitcher._lastUsedDevice = 'mouse' {                     ; last used device is the mouse
-                    HighlightRow(TaskSwitcher.colors.rowHoverHighlight)                  ; highlight row as mouse hover color
+                    HighlightRow(TaskSwitcher.colors.rowHoverHighlight)         ; highlight row as mouse hover color
                     return
                 }
             }
@@ -2461,8 +2489,8 @@ class UI extends Gui {
             ; mouse is not hovered over row being checked
             ; mouse is hovered over keyboard-highlighted row
             ; last used device is the keyboard
-            if TaskSwitcher._highlightedRow = index {                          ; if keyboard-highlighted row is row being checked
-                HighlightRow(TaskSwitcher.colors.rowHighlight)              ; highlight row as row highlight
+            if TaskSwitcher._highlightedRow = index {                           ; if keyboard-highlighted row is row being checked
+                HighlightRow(TaskSwitcher.colors.rowHighlight)                  ; highlight row as row highlight
             }
 
             HighlightRow(color) {
@@ -2569,10 +2597,11 @@ class UI extends Gui {
             return
         }
 
-        width := TaskSwitcher.menuWidth - TaskSwitcher._partitionPos
+        width  := TaskSwitcher.menuWidth - TaskSwitcher._partitionPos
         height := TaskSwitcher._menuHeight - TaskSwitcher._topBarHeight
 
-        if TaskSwitcher._lastWindowListUIWidth != TaskSwitcher._partitionPos || height != TaskSwitcher._lastWindowListUIHeight {
+        if TaskSwitcher._lastWindowListUIWidth != TaskSwitcher._partitionPos
+        || height != TaskSwitcher._lastWindowListUIHeight {
             this.__DestroyGDIPSection('Panel')
             this.__CreateGDIPSection('Panel', width, height)
         }
@@ -2602,7 +2631,7 @@ class UI extends Gui {
         }
         Gdip_DeleteBrush(pBrushPartition)
 
-        this.DrawPanelTabs(Panel)
+        this.DrawPanelTabs()
 
         ; draw tab content
         tabHeight := TaskSwitcher._tabBarHeight
@@ -2611,8 +2640,9 @@ class UI extends Gui {
 
         if TaskSwitcher._windowList.Length = 0 {
             Panel := this._sections['Panel'].graphics
+
             if TaskSwitcher._panelTab = 'preview'  {
-                availableWidth := width - (TaskSwitcher.marginX * 2)
+                availableWidth  := width  - (TaskSwitcher.marginX * 2)
                 availableHeight := height - (TaskSwitcher.marginY * 2)
 
                 x := TaskSwitcher.marginX
@@ -2641,7 +2671,7 @@ class UI extends Gui {
     }
 
     static UpdateWindow() {
-        width := TaskSwitcher.menuWidth
+        width  := TaskSwitcher.menuWidth
         height := TaskSwitcher._menuHeight
 
         if height != TaskSwitcher._lastWindowUIHeight {
@@ -2664,7 +2694,7 @@ class UI extends Gui {
         BitBlt(Window.hdc, searchBar.x1, searchBar.y1, searchBar.x2, searchBar.h, sections['SearchBar'].hdc, 0, 0)
 
         if TaskSwitcher._showPanel {
-            panelWidth := width - TaskSwitcher._partitionPos
+            panelWidth  := width - TaskSwitcher._partitionPos
             panelHeight := height - TaskSwitcher._topBarHeight
             BitBlt(Window.hdc, TaskSwitcher._partitionPos, TaskSwitcher._topBarHeight, panelWidth, panelHeight, sections['Panel'].hdc, 0, 0)
         }
@@ -2674,11 +2704,12 @@ class UI extends Gui {
             TaskSwitcher._y := top + (bottom - top - height) / 2
         }
 
-        UpdateLayeredWindow(TaskSwitcher.Menu.Hwnd, Window.hdc, TaskSwitcher._x, TaskSwitcher._y, width, height)
+        UpdateLayeredWindow(UI.Menu.Hwnd, Window.hdc, TaskSwitcher._x, TaskSwitcher._y, width, height)
     }
 
-    static DrawPanelTabs(Panel := UI._sections['Panel'].graphics) {
+    static DrawPanelTabs() {
         static tabs := ['Preview', 'Info']
+        Panel := UI._sections['Panel'].graphics
         TaskSwitcher._panelTabRects := []
 
         width := TaskSwitcher.menuWidth - TaskSwitcher._partitionPos

@@ -27,7 +27,7 @@ TaskSwitcher({
         rowDivider: 0x88FFFFFF,
     },
 
-    alwaysHighlightFirst: true,
+    alwaysHighlightFirstRow: true,
     escapePriority: true,
     closeButtonSize: 40,
     menuWidth: 1500,

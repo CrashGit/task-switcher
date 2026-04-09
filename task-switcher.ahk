@@ -254,6 +254,10 @@ export class TaskSwitcher {
             altTabHotkeysEnabled := true
             TaskSwitcher.OpenMenu({index: 2})
         }, state)
+        Hotkey('+!Tab', (*) {
+            altTabHotkeysEnabled := true
+            TaskSwitcher.OpenMenu({index: -1})
+        }, state)
 
 
         HotIf((*) => altTabHotkeysEnabled && TaskSwitcher.isActive)
@@ -693,7 +697,11 @@ export class TaskSwitcher {
 
         this.__RefreshWindowList(options)
         startingIndex := options.index ?? 1
-        this._highlightedRow := Min(Max(1, startingIndex), this._windowList.Length)
+        if startingIndex < 0 {
+            this._highlightedRow := this._windowList.Length - (Abs(startingIndex) - 1)
+        } else {
+            this._highlightedRow := Min(Max(1, startingIndex), this._windowList.Length)
+        }
 
         this.__FirstDraw()
         UI.Menu.Show('w' this.menuWidth ' h' this._menuHeight)

@@ -249,24 +249,26 @@ export class TaskSwitcher {
             state := previousState = 'On' ? 'Off' : 'On'
         }
 
+        local options := 'I99 ' . state
+
         HotIf((*) => !TaskSwitcher.isOpen)
         Hotkey('!Tab', (*) {
             altTabHotkeysEnabled := true
             TaskSwitcher.OpenMenu({index: 2})
-        }, state)
+        }, options)
         Hotkey('+!Tab', (*) {
             altTabHotkeysEnabled := true
             TaskSwitcher.OpenMenu({index: -1})
-        }, state)
+        }, options)
 
 
         HotIf((*) => altTabHotkeysEnabled && TaskSwitcher.isActive)
-        Hotkey('!Tab', (*) => TaskSwitcher.HighlightNextRow(), state)
-        Hotkey('+!Tab', (*) => TaskSwitcher.HighlightPreviousRow(), state)
+        Hotkey('!Tab', (*) => TaskSwitcher.HighlightNextRow(), options)
+        Hotkey('+!Tab', (*) => TaskSwitcher.HighlightPreviousRow(), options)
         Hotkey('*!Escape', (*) {
             TaskSwitcher.CloseMenu()
             altTabHotkeysEnabled := false
-        }, state)
+        }, options)
 
 
         HotIf((*) => altTabHotkeysEnabled)
@@ -283,7 +285,7 @@ export class TaskSwitcher {
                 }
             }
             altTabHotkeysEnabled := false   ; keep at bottom. otherwise, if last condition fails, var will be reset before failing condition and !Tab could potentially be triggered again by accident by the user
-        }, state)
+        }, options)
         HotIf()
 
         previousState := state
@@ -2051,7 +2053,6 @@ export class TaskSwitcher {
      */
     static __GetAltTabWindowList(options) {
         static  WS_EX_TOOLWINDOW := 0x80,
-                GA_ROOTOWNER     := 3,
                 ImmersiveShell,
                 IApplicationViewCollection
 
@@ -2086,10 +2087,7 @@ export class TaskSwitcher {
         }
 
         for hwnd in windows {
-            owner := DllCall('GetAncestor', 'Ptr', hwnd, 'UInt', GA_ROOTOWNER, 'Ptr')
-            owner := owner || hwnd
-
-            if DllCall('GetLastActivePopup', 'Ptr', owner) = hwnd {
+            try {
                 ex := WinGetExStyle(hwnd)
 
                 ; don't add window to list if any of these conditions are true

@@ -838,7 +838,10 @@ export class TaskSwitcher {
         maxWidth  := panelWidth  - (margin * 2)
         maxHeight := panelHeight - (margin * 2)
 
-        sourceAspect := winW / winH
+        try sourceAspect := winW / winH     ; got a divide by zero trying to alt-tab out of a game
+        catch {
+            return
+        }
 
         destWidth  := Min(maxWidth,  Round(maxHeight * sourceAspect))
         destHeight := Min(maxHeight, Round(destWidth / sourceAspect))
